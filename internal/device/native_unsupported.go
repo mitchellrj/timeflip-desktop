@@ -4,6 +4,7 @@ package device
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
@@ -11,7 +12,15 @@ import (
 
 type UnsupportedClient struct{}
 
+type NativeClientOptions struct {
+	TraceBLE io.Writer
+}
+
 func NewNativeDeviceClient(time.Duration) (Client, error) {
+	return UnsupportedClient{}, nil
+}
+
+func NewNativeDeviceClientWithOptions(time.Duration, NativeClientOptions) (Client, error) {
 	return UnsupportedClient{}, nil
 }
 
@@ -40,6 +49,10 @@ func (UnsupportedClient) SetAutoPause(context.Context, Handle, uint16) error { r
 func (UnsupportedClient) SetTapSettings(context.Context, Handle, TapSettings) error {
 	return unsupported()
 }
+func (UnsupportedClient) SetLEDSettings(context.Context, Handle, LEDSettings) error {
+	return unsupported()
+}
+func (UnsupportedClient) SetDeviceName(context.Context, Handle, string) error { return unsupported() }
 func (UnsupportedClient) ReadHistory(context.Context, Handle, HistoryRequest) ([]domain.DeviceEventRecord, error) {
 	return nil, unsupported()
 }

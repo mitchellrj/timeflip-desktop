@@ -10,15 +10,14 @@ This file tracks intentional first-pass gaps from `/spdd-generate` for `spdd/pro
 
 ## Desktop Shell
 
-- Manually QA the Wails v3 system tray control centre on macOS: tray icon visibility, menu refresh, attached-window positioning, close-to-hide behaviour, pause/resume action, and explicit Quit.
+- Manually QA the Wails v3 system tray control centre on macOS: tray icon visibility, menu refresh, normal app-switcher/window focus behaviour, close-to-hide behaviour, pause/resume action, and explicit Quit.
 - Decide whether to keep tracking Wails v3 alpha releases directly or pin a reviewed upgrade cadence before packaging.
 - Consider adding frontend-specific DTOs with string timestamps if Wails binding generation warnings for `time.Time` become noisy. The current generated bindings work and type these fields as `any`.
 
 ## Frontend
 
-- Wire all pairing, unpairing, facet editing, password update, and settings forms to the backend API. The current frontend is a first dashboard shell and state viewer.
-- Add frontend tests or browser smoke tests after the Wails/Vite build path is settled.
-- Add a polished password update flow that never displays the stored value.
+- Run a manual browser/Wails smoke test for the full frontend flow once a real or simulated device path is available: scan, pair, connect, facet save, pause/resume, password update, unpair, and settings save.
+- Add broader component or browser automation coverage after the Wails v3 tray/window lifecycle is stable enough for repeatable app launch tests.
 
 ## Persistence And Security
 

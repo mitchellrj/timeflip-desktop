@@ -50,16 +50,22 @@ func (c *Controller) GetAppState() (services.AppState, error) {
 	}
 	devices := make([]domain.DeviceProfileView, 0, len(profiles))
 	var states []domain.DeviceState
+	var tapSettings []domain.DeviceTapSettings
+	var ledSettings []domain.DeviceLEDSettings
 	var facets []domain.FacetConfigurationView
 	for _, profile := range profiles {
 		devices = append(devices, profile.View())
 		if state, err := c.store.GetDeviceState(ctx, profile.ID); err == nil {
 			states = append(states, state)
 		}
-		if len(facets) == 0 {
-			if views, err := c.tasks.ListFacetConfiguration(ctx, profile.ID); err == nil {
-				facets = views
-			}
+		if settings, err := c.store.GetDeviceTapSettings(ctx, profile.ID); err == nil {
+			tapSettings = append(tapSettings, settings)
+		}
+		if settings, err := c.store.GetDeviceLEDSettings(ctx, profile.ID); err == nil {
+			ledSettings = append(ledSettings, settings)
+		}
+		if views, err := c.tasks.ListFacetConfiguration(ctx, profile.ID); err == nil {
+			facets = append(facets, views...)
 		}
 	}
 	tasks, err := c.store.ListTasks(ctx, false)
@@ -74,7 +80,7 @@ func (c *Controller) GetAppState() (services.AppState, error) {
 	if len(profiles) > 0 {
 		current, _ = c.history.GetCurrentSession(ctx, profiles[0].ID)
 	}
-	return services.AppState{Config: cfg, Devices: devices, States: states, Tasks: tasks, Sessions: sessions, FacetConfigs: facets, CurrentSession: current}, nil
+	return services.AppState{Config: cfg, Devices: devices, States: states, TapSettings: tapSettings, LEDSettings: ledSettings, Tasks: tasks, Sessions: sessions, FacetConfigs: facets, CurrentSession: current}, nil
 }
 
 func (c *Controller) ScanDevices() ([]domain.DiscoveredDevice, error) {
@@ -103,6 +109,9 @@ func (c *Controller) UnpairDevice(req UnpairDeviceRequest) (domain.UnpairingWork
 }
 
 func (c *Controller) ConnectDevice(deviceID string) error {
+	if c.connection != nil {
+		return c.connection.ConnectDevice(c.context(), deviceID)
+	}
 	return c.devices.ConnectDevice(c.context(), deviceID)
 }
 
@@ -132,6 +141,10 @@ func (c *Controller) SetPaused(deviceID string, paused bool) error {
 	return c.devices.SetPaused(c.context(), deviceID, paused)
 }
 
+func (c *Controller) SetLocked(deviceID string, locked bool) error {
+	return c.devices.SetLocked(c.context(), deviceID, locked)
+}
+
 type TapPauseSettingsRequest struct {
 	DeviceID string `json:"deviceID"`
 	Paused   bool   `json:"paused"`
@@ -139,6 +152,23 @@ type TapPauseSettingsRequest struct {
 
 func (c *Controller) SaveTapPauseSettings(req TapPauseSettingsRequest) error {
 	return c.devices.ConfigureTapPause(c.context(), req.DeviceID, req.Paused)
+}
+
+func (c *Controller) SaveTapSettings(settings domain.DeviceTapSettings) (domain.DeviceTapSettings, error) {
+	return c.devices.ConfigureTapSettings(c.context(), settings)
+}
+
+func (c *Controller) SaveLEDSettings(settings domain.DeviceLEDSettings) (domain.DeviceLEDSettings, error) {
+	return c.devices.ConfigureLEDSettings(c.context(), settings)
+}
+
+type SaveDeviceNameRequest struct {
+	DeviceID string `json:"deviceID"`
+	Name     string `json:"name"`
+}
+
+func (c *Controller) SaveDeviceName(req SaveDeviceNameRequest) (domain.DeviceProfileView, error) {
+	return c.devices.ConfigureDeviceName(c.context(), req.DeviceID, req.Name)
 }
 
 func (c *Controller) ListTaskSessions(filter domain.TaskSessionFilter) ([]domain.TaskSession, error) {

@@ -63,12 +63,32 @@ export function PairDevice(req) {
 }
 
 /**
+ * @param {$models.SaveDeviceNameRequest} req
+ * @returns {$CancellablePromise<domain$0.DeviceProfileView>}
+ */
+export function SaveDeviceName(req) {
+    return $Call.ByID(1719811836, req).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * @param {domain$0.FacetConfigurationRequest} req
  * @returns {$CancellablePromise<domain$0.FacetConfigurationView>}
  */
 export function SaveFacetAssignment(req) {
     return $Call.ByID(138397421, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
+    }));
+}
+
+/**
+ * @param {domain$0.DeviceLEDSettings} settings
+ * @returns {$CancellablePromise<domain$0.DeviceLEDSettings>}
+ */
+export function SaveLEDSettings(settings) {
+    return $Call.ByID(615670515, settings).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType6($result);
     }));
 }
 
@@ -89,12 +109,22 @@ export function SaveTapPauseSettings(req) {
 }
 
 /**
+ * @param {domain$0.DeviceTapSettings} settings
+ * @returns {$CancellablePromise<domain$0.DeviceTapSettings>}
+ */
+export function SaveTapSettings(settings) {
+    return $Call.ByID(1509613963, settings).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
  * @param {$models.SaveTaskRequest} req
  * @returns {$CancellablePromise<domain$0.Task>}
  */
 export function SaveTask(req) {
     return $Call.ByID(3180049120, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType8($result);
     }));
 }
 
@@ -103,8 +133,17 @@ export function SaveTask(req) {
  */
 export function ScanDevices() {
     return $Call.ByID(4085665344).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType10($result);
     }));
+}
+
+/**
+ * @param {string} deviceID
+ * @param {boolean} locked
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetLocked(deviceID, locked) {
+    return $Call.ByID(941562546, deviceID, locked);
 }
 
 /**
@@ -136,7 +175,7 @@ export function Startup() {
  */
 export function UnpairDevice(req) {
     return $Call.ByID(2780315949, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType11($result);
     }));
 }
 
@@ -145,8 +184,11 @@ const $$createType0 = services$0.AppState.createFrom;
 const $$createType1 = domain$0.TaskSession.createFrom;
 const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = domain$0.PairingWorkflow.createFrom;
-const $$createType4 = domain$0.FacetConfigurationView.createFrom;
-const $$createType5 = domain$0.Task.createFrom;
-const $$createType6 = domain$0.DiscoveredDevice.createFrom;
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = domain$0.UnpairingWorkflow.createFrom;
+const $$createType4 = domain$0.DeviceProfileView.createFrom;
+const $$createType5 = domain$0.FacetConfigurationView.createFrom;
+const $$createType6 = domain$0.DeviceLEDSettings.createFrom;
+const $$createType7 = domain$0.DeviceTapSettings.createFrom;
+const $$createType8 = domain$0.Task.createFrom;
+const $$createType9 = domain$0.DiscoveredDevice.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = domain$0.UnpairingWorkflow.createFrom;

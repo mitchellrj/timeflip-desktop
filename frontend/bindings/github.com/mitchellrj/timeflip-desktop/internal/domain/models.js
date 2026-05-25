@@ -83,6 +83,62 @@ export const ConnectionState = {
     ConnectionError: "error",
 };
 
+export class DeviceLEDSettings {
+    /**
+     * Creates a new DeviceLEDSettings instance.
+     * @param {Partial<DeviceLEDSettings>} [$$source = {}] - The source object to create the DeviceLEDSettings.
+     */
+    constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
+        if (!("brightnessPercent" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["brightnessPercent"] = 0;
+        }
+        if (!("blinkSeconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["blinkSeconds"] = 0;
+        }
+        if (!("confirmedOnDevice" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["confirmedOnDevice"] = false;
+        }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeviceLEDSettings instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DeviceLEDSettings}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeviceLEDSettings(/** @type {Partial<DeviceLEDSettings>} */($$parsedSource));
+    }
+}
+
 export class DeviceProfileView {
     /**
      * Creates a new DeviceProfileView instance.
@@ -251,6 +307,76 @@ export class DeviceState {
     }
 }
 
+export class DeviceTapSettings {
+    /**
+     * Creates a new DeviceTapSettings instance.
+     * @param {Partial<DeviceTapSettings>} [$$source = {}] - The source object to create the DeviceTapSettings.
+     */
+    constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
+        if (!("threshold" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["threshold"] = 0;
+        }
+        if (!("limit" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["limit"] = 0;
+        }
+        if (!("latency" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["latency"] = 0;
+        }
+        if (!("window" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["window"] = 0;
+        }
+        if (!("confirmedOnDevice" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["confirmedOnDevice"] = false;
+        }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeviceTapSettings instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DeviceTapSettings}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeviceTapSettings(/** @type {Partial<DeviceTapSettings>} */($$parsedSource));
+    }
+}
+
 export class DiscoveredDevice {
     /**
      * Creates a new DiscoveredDevice instance.
@@ -366,6 +492,13 @@ export class FacetConfigurationRequest {
              */
             this["isPauseAssignment"] = false;
         }
+        if (!("isPomodoroAssignment" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["isPomodoroAssignment"] = false;
+        }
         if (!("pomodoroLimitSeconds" in $$source)) {
             /**
              * @member
@@ -394,6 +527,13 @@ export class FacetConfigurationView {
      * @param {Partial<FacetConfigurationView>} [$$source = {}] - The source object to create the FacetConfigurationView.
      */
     constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
         if (!("facet" in $$source)) {
             /**
              * @member
@@ -435,6 +575,13 @@ export class FacetConfigurationView {
              * @type {boolean}
              */
             this["isPauseAssignment"] = false;
+        }
+        if (!("isPomodoroAssignment" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["isPomodoroAssignment"] = false;
         }
         if (!("pomodoroLimitSeconds" in $$source)) {
             /**
@@ -829,6 +976,20 @@ export class TaskSession {
              * @type {number}
              */
             this["durationSeconds"] = 0;
+        }
+        if (!("pausedSeconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["pausedSeconds"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["pauseStartedAt"] = undefined;
         }
         if (!("source" in $$source)) {
             /**

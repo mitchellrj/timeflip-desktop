@@ -24,6 +24,12 @@ type Store interface {
 
 	SaveDeviceState(context.Context, domain.DeviceState) error
 	GetDeviceState(context.Context, string) (domain.DeviceState, error)
+	SaveDeviceTapSettings(context.Context, domain.DeviceTapSettings) error
+	GetDeviceTapSettings(context.Context, string) (domain.DeviceTapSettings, error)
+	ListDeviceTapSettings(context.Context) ([]domain.DeviceTapSettings, error)
+	SaveDeviceLEDSettings(context.Context, domain.DeviceLEDSettings) error
+	GetDeviceLEDSettings(context.Context, string) (domain.DeviceLEDSettings, error)
+	ListDeviceLEDSettings(context.Context) ([]domain.DeviceLEDSettings, error)
 
 	InsertDeviceEvent(context.Context, domain.DeviceEventRecord) error
 	ListDeviceEvents(context.Context, string) ([]domain.DeviceEventRecord, error)

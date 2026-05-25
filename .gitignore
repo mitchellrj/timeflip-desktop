@@ -5,3 +5,4 @@ build/
 *.log
 /android-app
 frontend/node_modules/
+frontend/dist

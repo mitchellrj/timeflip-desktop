@@ -9,6 +9,7 @@ export {
 
 export {
     PairDeviceRequest,
+    SaveDeviceNameRequest,
     SaveTaskRequest,
     TapPauseSettingsRequest,
     UnpairDeviceRequest

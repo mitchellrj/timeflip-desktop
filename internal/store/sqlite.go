@@ -81,27 +81,44 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 			task_icon_snapshot TEXT NOT NULL,
 			task_color_snapshot TEXT NOT NULL,
 			is_pause_assignment INTEGER NOT NULL,
+			is_pomodoro_assignment INTEGER NOT NULL DEFAULT 0,
 			pomodoro_limit_seconds INTEGER NOT NULL,
 			effective_from TEXT NOT NULL,
 			confirmed_on_device INTEGER NOT NULL,
 			UNIQUE(device_id, facet)
 		)`,
 		`CREATE TABLE IF NOT EXISTS device_states (
-			device_id TEXT PRIMARY KEY,
-			connection_state TEXT NOT NULL,
-			current_facet INTEGER NOT NULL,
-			current_facet_known INTEGER NOT NULL,
+				device_id TEXT PRIMARY KEY,
+				connection_state TEXT NOT NULL,
+				current_facet INTEGER NOT NULL,
+				current_facet_known INTEGER NOT NULL,
 			current_facet_undefined INTEGER NOT NULL,
 			paused INTEGER NOT NULL,
 			locked INTEGER NOT NULL,
 			battery_percent INTEGER NOT NULL,
-			system_status TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		)`,
+				system_status TEXT NOT NULL,
+				updated_at TEXT NOT NULL
+			)`,
+		`CREATE TABLE IF NOT EXISTS device_tap_settings (
+				device_id TEXT PRIMARY KEY,
+				threshold INTEGER NOT NULL,
+				limit_value INTEGER NOT NULL,
+				latency INTEGER NOT NULL,
+				window_value INTEGER NOT NULL,
+				confirmed_on_device INTEGER NOT NULL,
+				updated_at TEXT NOT NULL
+			)`,
+		`CREATE TABLE IF NOT EXISTS device_led_settings (
+				device_id TEXT PRIMARY KEY,
+				brightness_percent INTEGER NOT NULL,
+				blink_seconds INTEGER NOT NULL,
+				confirmed_on_device INTEGER NOT NULL,
+				updated_at TEXT NOT NULL
+			)`,
 		`CREATE TABLE IF NOT EXISTS device_events (
-			id TEXT PRIMARY KEY,
-			device_id TEXT NOT NULL,
-			kind TEXT NOT NULL,
+				id TEXT PRIMARY KEY,
+				device_id TEXT NOT NULL,
+				kind TEXT NOT NULL,
 			facet INTEGER NOT NULL,
 			pause INTEGER NOT NULL,
 			event_number INTEGER NOT NULL,
@@ -131,7 +148,45 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 			return domain.PersistenceError{AppError: domain.NewAppError(domain.ErrStorage, "Could not migrate local database.", fmt.Sprintf("migration %d failed: %v", i, err), err)}
 		}
 	}
+	if err := s.ensureColumn(ctx, "task_sessions", "paused_seconds", "paused_seconds INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn(ctx, "task_sessions", "pause_started_at", "pause_started_at TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn(ctx, "facet_assignments", "is_pomodoro_assignment", "is_pomodoro_assignment INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE facet_assignments SET is_pomodoro_assignment = 1 WHERE is_pause_assignment = 0 AND pomodoro_limit_seconds > 0`); err != nil {
+		return wrapStoreErr("Could not migrate local database.", err)
+	}
 	return nil
+}
+
+func (s *SQLiteStore) ensureColumn(ctx context.Context, table string, column string, definition string) error {
+	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info("+table+")")
+	if err != nil {
+		return wrapStoreErr("Could not inspect local database schema.", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return wrapStoreErr("Could not inspect local database schema.", err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return wrapStoreErr("Could not inspect local database schema.", err)
+	}
+	_, err = s.db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+definition)
+	return wrapStoreErr("Could not migrate local database.", err)
 }
 
 func (s *SQLiteStore) SaveDeviceProfile(ctx context.Context, profile domain.DeviceProfile) error {
@@ -242,8 +297,8 @@ func (s *SQLiteStore) SaveFacetAssignment(ctx context.Context, a domain.FacetAss
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO facet_assignments
-		(id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, is_pomodoro_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(device_id, facet) DO UPDATE SET
 			id=excluded.id,
 			task_id=excluded.task_id,
@@ -251,16 +306,17 @@ func (s *SQLiteStore) SaveFacetAssignment(ctx context.Context, a domain.FacetAss
 			task_icon_snapshot=excluded.task_icon_snapshot,
 			task_color_snapshot=excluded.task_color_snapshot,
 			is_pause_assignment=excluded.is_pause_assignment,
+			is_pomodoro_assignment=excluded.is_pomodoro_assignment,
 			pomodoro_limit_seconds=excluded.pomodoro_limit_seconds,
 			effective_from=excluded.effective_from,
 			confirmed_on_device=excluded.confirmed_on_device`,
 		a.ID, a.DeviceID, a.Facet, a.TaskID, a.TaskLabelSnapshot, a.TaskIconSnapshot, a.TaskColorSnapshot,
-		boolInt(a.IsPauseAssignment), a.PomodoroLimitSeconds, formatTime(a.EffectiveFrom), boolInt(a.ConfirmedOnDevice))
+		boolInt(a.IsPauseAssignment), boolInt(a.IsPomodoroAssignment), a.PomodoroLimitSeconds, formatTime(a.EffectiveFrom), boolInt(a.ConfirmedOnDevice))
 	return wrapStoreErr("Could not save facet assignment.", err)
 }
 
 func (s *SQLiteStore) ListFacetAssignments(ctx context.Context, deviceID string) ([]domain.FacetAssignment, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device FROM facet_assignments WHERE device_id = ? ORDER BY facet ASC`, deviceID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, is_pomodoro_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device FROM facet_assignments WHERE device_id = ? ORDER BY facet ASC`, deviceID)
 	if err != nil {
 		return nil, wrapStoreErr("Could not list facet assignments.", err)
 	}
@@ -277,7 +333,7 @@ func (s *SQLiteStore) ListFacetAssignments(ctx context.Context, deviceID string)
 }
 
 func (s *SQLiteStore) GetFacetAssignment(ctx context.Context, deviceID string, facet uint8) (domain.FacetAssignment, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device FROM facet_assignments WHERE device_id = ? AND facet = ?`, deviceID, facet)
+	row := s.db.QueryRowContext(ctx, `SELECT id, device_id, facet, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, is_pause_assignment, is_pomodoro_assignment, pomodoro_limit_seconds, effective_from, confirmed_on_device FROM facet_assignments WHERE device_id = ? AND facet = ?`, deviceID, facet)
 	return scanAssignment(row)
 }
 
@@ -320,6 +376,84 @@ func (s *SQLiteStore) GetDeviceState(ctx context.Context, deviceID string) (doma
 	state.Locked = locked != 0
 	state.UpdatedAt = parseTime(updated)
 	return state, nil
+}
+
+func (s *SQLiteStore) SaveDeviceTapSettings(ctx context.Context, settings domain.DeviceTapSettings) error {
+	if settings.UpdatedAt.IsZero() {
+		settings.UpdatedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO device_tap_settings
+		(device_id, threshold, limit_value, latency, window_value, confirmed_on_device, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(device_id) DO UPDATE SET
+			threshold=excluded.threshold,
+			limit_value=excluded.limit_value,
+			latency=excluded.latency,
+			window_value=excluded.window_value,
+			confirmed_on_device=excluded.confirmed_on_device,
+			updated_at=excluded.updated_at`,
+		settings.DeviceID, settings.Threshold, settings.Limit, settings.Latency, settings.Window, boolInt(settings.ConfirmedOnDevice), formatTime(settings.UpdatedAt))
+	return wrapStoreErr("Could not save tap settings.", err)
+}
+
+func (s *SQLiteStore) GetDeviceTapSettings(ctx context.Context, deviceID string) (domain.DeviceTapSettings, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT device_id, threshold, limit_value, latency, window_value, confirmed_on_device, updated_at FROM device_tap_settings WHERE device_id = ?`, deviceID)
+	return scanTapSettings(row)
+}
+
+func (s *SQLiteStore) ListDeviceTapSettings(ctx context.Context) ([]domain.DeviceTapSettings, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT device_id, threshold, limit_value, latency, window_value, confirmed_on_device, updated_at FROM device_tap_settings ORDER BY device_id ASC`)
+	if err != nil {
+		return nil, wrapStoreErr("Could not list tap settings.", err)
+	}
+	defer rows.Close()
+	var out []domain.DeviceTapSettings
+	for rows.Next() {
+		settings, err := scanTapSettings(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, settings)
+	}
+	return out, wrapStoreErr("Could not list tap settings.", rows.Err())
+}
+
+func (s *SQLiteStore) SaveDeviceLEDSettings(ctx context.Context, settings domain.DeviceLEDSettings) error {
+	if settings.UpdatedAt.IsZero() {
+		settings.UpdatedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO device_led_settings
+		(device_id, brightness_percent, blink_seconds, confirmed_on_device, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(device_id) DO UPDATE SET
+			brightness_percent=excluded.brightness_percent,
+			blink_seconds=excluded.blink_seconds,
+			confirmed_on_device=excluded.confirmed_on_device,
+			updated_at=excluded.updated_at`,
+		settings.DeviceID, settings.BrightnessPercent, settings.BlinkSeconds, boolInt(settings.ConfirmedOnDevice), formatTime(settings.UpdatedAt))
+	return wrapStoreErr("Could not save LED settings.", err)
+}
+
+func (s *SQLiteStore) GetDeviceLEDSettings(ctx context.Context, deviceID string) (domain.DeviceLEDSettings, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT device_id, brightness_percent, blink_seconds, confirmed_on_device, updated_at FROM device_led_settings WHERE device_id = ?`, deviceID)
+	return scanLEDSettings(row)
+}
+
+func (s *SQLiteStore) ListDeviceLEDSettings(ctx context.Context) ([]domain.DeviceLEDSettings, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT device_id, brightness_percent, blink_seconds, confirmed_on_device, updated_at FROM device_led_settings ORDER BY device_id ASC`)
+	if err != nil {
+		return nil, wrapStoreErr("Could not list LED settings.", err)
+	}
+	defer rows.Close()
+	var out []domain.DeviceLEDSettings
+	for rows.Next() {
+		settings, err := scanLEDSettings(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, settings)
+	}
+	return out, wrapStoreErr("Could not list LED settings.", rows.Err())
 }
 
 func (s *SQLiteStore) InsertDeviceEvent(ctx context.Context, event domain.DeviceEventRecord) error {
@@ -365,20 +499,26 @@ func (s *SQLiteStore) SaveTaskSession(ctx context.Context, session domain.TaskSe
 	if session.EndedAt != nil {
 		ended = formatTime(*session.EndedAt)
 	}
+	var pauseStarted any
+	if session.PauseStartedAt != nil {
+		pauseStarted = formatTime(*session.PauseStartedAt)
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO task_sessions
-		(id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, source, start_event_number, end_event_number)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, paused_seconds, pause_started_at, source, start_event_number, end_event_number)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			ended_at=excluded.ended_at,
 			duration_seconds=excluded.duration_seconds,
+			paused_seconds=excluded.paused_seconds,
+			pause_started_at=excluded.pause_started_at,
 			end_event_number=excluded.end_event_number`,
 		session.ID, session.DeviceID, session.TaskID, session.TaskLabelSnapshot, session.TaskIconSnapshot, session.TaskColorSnapshot, session.Facet,
-		formatTime(session.StartedAt), ended, session.DurationSeconds, session.Source, session.StartEventNumber, session.EndEventNumber)
+		formatTime(session.StartedAt), ended, session.DurationSeconds, session.PausedSeconds, pauseStarted, session.Source, session.StartEventNumber, session.EndEventNumber)
 	return wrapStoreErr("Could not save task session.", err)
 }
 
 func (s *SQLiteStore) ListTaskSessions(ctx context.Context, filter domain.TaskSessionFilter) ([]domain.TaskSession, error) {
-	query := `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, source, start_event_number, end_event_number FROM task_sessions WHERE 1=1`
+	query := `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, paused_seconds, pause_started_at, source, start_event_number, end_event_number FROM task_sessions WHERE 1=1`
 	var args []any
 	if filter.DeviceID != "" {
 		query += ` AND device_id = ?`
@@ -418,7 +558,7 @@ func (s *SQLiteStore) ListTaskSessions(ctx context.Context, filter domain.TaskSe
 }
 
 func (s *SQLiteStore) GetOpenTaskSession(ctx context.Context, deviceID string) (domain.TaskSession, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, source, start_event_number, end_event_number FROM task_sessions WHERE device_id = ? AND (ended_at IS NULL OR ended_at = '') ORDER BY started_at DESC LIMIT 1`, deviceID)
+	row := s.db.QueryRowContext(ctx, `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, paused_seconds, pause_started_at, source, start_event_number, end_event_number FROM task_sessions WHERE device_id = ? AND (ended_at IS NULL OR ended_at = '') ORDER BY started_at DESC LIMIT 1`, deviceID)
 	return scanSession(row)
 }
 
@@ -482,13 +622,14 @@ func scanDeviceProfile(row scanner) (domain.DeviceProfile, error) {
 
 func scanAssignment(row scanner) (domain.FacetAssignment, error) {
 	var a domain.FacetAssignment
-	var pause, confirmed int
+	var pause, pomodoro, confirmed int
 	var effective string
-	err := row.Scan(&a.ID, &a.DeviceID, &a.Facet, &a.TaskID, &a.TaskLabelSnapshot, &a.TaskIconSnapshot, &a.TaskColorSnapshot, &pause, &a.PomodoroLimitSeconds, &effective, &confirmed)
+	err := row.Scan(&a.ID, &a.DeviceID, &a.Facet, &a.TaskID, &a.TaskLabelSnapshot, &a.TaskIconSnapshot, &a.TaskColorSnapshot, &pause, &pomodoro, &a.PomodoroLimitSeconds, &effective, &confirmed)
 	if err != nil {
 		return domain.FacetAssignment{}, wrapScanNotFound("Could not load facet assignment.", err)
 	}
 	a.IsPauseAssignment = pause != 0
+	a.IsPomodoroAssignment = pomodoro != 0
 	a.ConfirmedOnDevice = confirmed != 0
 	a.EffectiveFrom = parseTime(effective)
 	return a, nil
@@ -498,7 +639,8 @@ func scanSession(row scanner) (domain.TaskSession, error) {
 	var session domain.TaskSession
 	var started string
 	var ended sql.NullString
-	err := row.Scan(&session.ID, &session.DeviceID, &session.TaskID, &session.TaskLabelSnapshot, &session.TaskIconSnapshot, &session.TaskColorSnapshot, &session.Facet, &started, &ended, &session.DurationSeconds, &session.Source, &session.StartEventNumber, &session.EndEventNumber)
+	var pauseStarted sql.NullString
+	err := row.Scan(&session.ID, &session.DeviceID, &session.TaskID, &session.TaskLabelSnapshot, &session.TaskIconSnapshot, &session.TaskColorSnapshot, &session.Facet, &started, &ended, &session.DurationSeconds, &session.PausedSeconds, &pauseStarted, &session.Source, &session.StartEventNumber, &session.EndEventNumber)
 	if err != nil {
 		return domain.TaskSession{}, wrapScanNotFound("Could not load task session.", err)
 	}
@@ -507,7 +649,37 @@ func scanSession(row scanner) (domain.TaskSession, error) {
 		t := parseTime(ended.String)
 		session.EndedAt = &t
 	}
+	if pauseStarted.Valid && pauseStarted.String != "" {
+		t := parseTime(pauseStarted.String)
+		session.PauseStartedAt = &t
+	}
 	return session, nil
+}
+
+func scanTapSettings(row scanner) (domain.DeviceTapSettings, error) {
+	var settings domain.DeviceTapSettings
+	var confirmed int
+	var updated string
+	err := row.Scan(&settings.DeviceID, &settings.Threshold, &settings.Limit, &settings.Latency, &settings.Window, &confirmed, &updated)
+	if err != nil {
+		return domain.DeviceTapSettings{}, wrapScanNotFound("Could not load tap settings.", err)
+	}
+	settings.ConfirmedOnDevice = confirmed != 0
+	settings.UpdatedAt = parseTime(updated)
+	return settings, nil
+}
+
+func scanLEDSettings(row scanner) (domain.DeviceLEDSettings, error) {
+	var settings domain.DeviceLEDSettings
+	var confirmed int
+	var updated string
+	err := row.Scan(&settings.DeviceID, &settings.BrightnessPercent, &settings.BlinkSeconds, &confirmed, &updated)
+	if err != nil {
+		return domain.DeviceLEDSettings{}, wrapScanNotFound("Could not load LED settings.", err)
+	}
+	settings.ConfirmedOnDevice = confirmed != 0
+	settings.UpdatedAt = parseTime(updated)
+	return settings, nil
 }
 
 func wrapScanNotFound(message string, err error) error {

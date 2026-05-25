@@ -29,6 +29,22 @@ func ValidateDeviceProfile(profile DeviceProfile) error {
 	return nil
 }
 
+func ValidateDeviceName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ValidationError{NewAppError(ErrValidation, "Device name is required.", "device name is empty", nil)}
+	}
+	if len(name) > 18 {
+		return ValidationError{NewAppError(ErrValidation, "Device name must be 18 ASCII characters or fewer.", "device name exceeds TimeFlip2 limit", nil)}
+	}
+	for i := 0; i < len(name); i++ {
+		if name[i] < 0x20 || name[i] > 0x7e {
+			return ValidationError{NewAppError(ErrValidation, "Device name must use printable ASCII characters.", "device name contains non-ascii or control characters", nil)}
+		}
+	}
+	return nil
+}
+
 func ValidateTask(task Task) error {
 	if strings.TrimSpace(task.Label) == "" {
 		return ValidationError{NewAppError(ErrValidation, "Task label is required.", "task label is empty", nil)}
@@ -52,11 +68,40 @@ func ValidateFacetAssignment(assignment FacetAssignment) error {
 	if assignment.IsPauseAssignment && assignment.TaskID != "" {
 		return ValidationError{NewAppError(ErrValidation, "A pause side cannot also be a task.", "pause assignment has task id", nil)}
 	}
+	if assignment.IsPauseAssignment && assignment.IsPomodoroAssignment {
+		return ValidationError{NewAppError(ErrValidation, "A pause side cannot also be a pomodoro side.", "pause assignment marked pomodoro", nil)}
+	}
 	if !assignment.IsPauseAssignment && strings.TrimSpace(assignment.TaskID) == "" {
 		return ValidationError{NewAppError(ErrValidation, "Task assignment is required.", "non-pause assignment has no task id", nil)}
 	}
+	if assignment.IsPomodoroAssignment && assignment.PomodoroLimitSeconds == 0 {
+		return ValidationError{NewAppError(ErrValidation, "Pomodoro duration is required.", "pomodoro assignment has no duration", nil)}
+	}
+	if !assignment.IsPomodoroAssignment && assignment.PomodoroLimitSeconds != 0 {
+		return ValidationError{NewAppError(ErrValidation, "Pomodoro duration only applies to pomodoro sides.", "normal assignment has pomodoro duration", nil)}
+	}
 	if assignment.PomodoroLimitSeconds > 24*60*60 {
 		return ValidationError{NewAppError(ErrValidation, "Pomodoro duration is too long.", "pomodoro exceeds 24 hours", nil)}
+	}
+	return nil
+}
+
+func ValidateDeviceTapSettings(settings DeviceTapSettings) error {
+	if strings.TrimSpace(settings.DeviceID) == "" {
+		return ValidationError{NewAppError(ErrValidation, "Device ID is required.", "tap settings device id is empty", nil)}
+	}
+	return nil
+}
+
+func ValidateDeviceLEDSettings(settings DeviceLEDSettings) error {
+	if strings.TrimSpace(settings.DeviceID) == "" {
+		return ValidationError{NewAppError(ErrValidation, "Device ID is required.", "LED settings device id is empty", nil)}
+	}
+	if settings.BrightnessPercent < 1 || settings.BrightnessPercent > 100 {
+		return ValidationError{NewAppError(ErrValidation, "LED brightness must be between 1% and 100%.", "led brightness outside TimeFlip2 range", nil)}
+	}
+	if settings.BlinkSeconds < 5 || settings.BlinkSeconds > 60 {
+		return ValidationError{NewAppError(ErrValidation, "LED blink must be between 5 and 60 seconds.", "led blink outside TimeFlip2 range", nil)}
 	}
 	return nil
 }
@@ -93,6 +138,13 @@ func EndTaskSession(session TaskSession, endedAt time.Time, eventNumber uint32) 
 	endedAt = endedAt.UTC()
 	if endedAt.Before(session.StartedAt) {
 		return TaskSession{}, false, TrackingError{NewAppError(ErrValidation, "Task session cannot end before it starts.", "negative session duration", nil)}
+	}
+	if session.PauseStartedAt != nil {
+		pauseStarted := session.PauseStartedAt.UTC()
+		if endedAt.After(pauseStarted) {
+			session.PausedSeconds += uint32(endedAt.Sub(pauseStarted).Seconds())
+		}
+		session.PauseStartedAt = nil
 	}
 	duration := endedAt.Sub(session.StartedAt)
 	if duration <= 0 {

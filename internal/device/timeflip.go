@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
@@ -125,17 +126,19 @@ func (c *TimeflipDeviceClient) ReadDeviceSnapshot(ctx context.Context, handle Ha
 		return domain.DeviceSnapshot{}, MapDeviceError(err)
 	}
 	system, _ := h.session.ReadSystemState(ctx)
+	tap, tapErr := h.session.ReadTapSettings(ctx, timeflip.CommandOptions{})
 	configs := make([]domain.FacetConfigurationView, 0, domain.FacetCount)
 	for facet := uint8(1); facet <= domain.FacetCount; facet++ {
 		params, err := h.session.ReadTaskParameters(ctx, timeflip.FacetID(facet), timeflip.CommandOptions{})
-		view := domain.FacetConfigurationView{Facet: facet}
+		view := domain.FacetConfigurationView{DeviceID: h.deviceID, Facet: facet}
 		if err == nil {
+			view.IsPomodoroAssignment = params.Mode == 1
 			view.PomodoroLimitSeconds = params.PomodoroLimitSeconds
 			view.AssignedOnDevice = params.Assigned
 		}
 		configs = append(configs, view)
 	}
-	return domain.DeviceSnapshot{
+	snapshot := domain.DeviceSnapshot{
 		Profile: domain.DeviceProfile{
 			ID:              h.deviceID,
 			DisplayName:     firstNonEmpty(info.Name, h.deviceID),
@@ -156,8 +159,20 @@ func (c *TimeflipDeviceClient) ReadDeviceSnapshot(ctx context.Context, handle Ha
 			UpdatedAt:             time.Now().UTC(),
 		},
 		FacetConfigs:  configs,
-		TapConfigured: false,
-	}, nil
+		TapConfigured: tapErr == nil && tap.Configured,
+	}
+	if tapErr == nil && tap.Configured {
+		snapshot.TapSettings = domain.DeviceTapSettings{
+			DeviceID:          h.deviceID,
+			Threshold:         tap.Threshold,
+			Limit:             tap.Limit,
+			Latency:           tap.Latency,
+			Window:            tap.Window,
+			ConfirmedOnDevice: true,
+			UpdatedAt:         time.Now().UTC(),
+		}
+	}
+	return snapshot, nil
 }
 
 func (c *TimeflipDeviceClient) WriteFacetConfiguration(ctx context.Context, handle Handle, assignment domain.FacetAssignment) (domain.FacetConfigurationView, error) {
@@ -167,11 +182,24 @@ func (c *TimeflipDeviceClient) WriteFacetConfiguration(ctx context.Context, hand
 	}
 	if assignment.TaskColorSnapshot != "" {
 		r, g, b := parseHexColor(assignment.TaskColorSnapshot)
-		_, _ = h.session.SetFacetColor(ctx, timeflip.FacetID(assignment.Facet), timeflip.RGB{R: r, G: g, B: b}, timeflip.CommandOptions{})
+		if _, err := h.session.SetFacetColor(ctx, timeflip.FacetID(assignment.Facet), timeflip.RGB{R: r, G: g, B: b}, timeflip.CommandOptions{}); err != nil {
+			return domain.FacetConfigurationView{
+				DeviceID:             assignment.DeviceID,
+				Facet:                assignment.Facet,
+				TaskID:               assignment.TaskID,
+				Label:                assignment.TaskLabelSnapshot,
+				Icon:                 assignment.TaskIconSnapshot,
+				Color:                assignment.TaskColorSnapshot,
+				IsPauseAssignment:    assignment.IsPauseAssignment,
+				IsPomodoroAssignment: assignment.IsPomodoroAssignment,
+				PomodoroLimitSeconds: assignment.PomodoroLimitSeconds,
+			}, MapDeviceError(err)
+		}
 	}
 	params := timeflip.TaskParameters{
 		Facet:                timeflip.FacetID(assignment.Facet),
 		Assigned:             !assignment.IsPauseAssignment,
+		Mode:                 taskMode(assignment),
 		PomodoroLimitSeconds: assignment.PomodoroLimitSeconds,
 	}
 	if _, err := h.session.SetTaskParameters(ctx, params, timeflip.CommandOptions{}); err != nil {
@@ -179,19 +207,28 @@ func (c *TimeflipDeviceClient) WriteFacetConfiguration(ctx context.Context, hand
 	}
 	readback, err := h.session.ReadTaskParameters(ctx, timeflip.FacetID(assignment.Facet), timeflip.CommandOptions{})
 	view := domain.FacetConfigurationView{
+		DeviceID:             assignment.DeviceID,
 		Facet:                assignment.Facet,
 		TaskID:               assignment.TaskID,
 		Label:                assignment.TaskLabelSnapshot,
 		Icon:                 assignment.TaskIconSnapshot,
 		Color:                assignment.TaskColorSnapshot,
 		IsPauseAssignment:    assignment.IsPauseAssignment,
+		IsPomodoroAssignment: assignment.IsPomodoroAssignment,
 		PomodoroLimitSeconds: assignment.PomodoroLimitSeconds,
-		AssignedOnDevice:     err == nil && readback.Assigned == !assignment.IsPauseAssignment,
+		AssignedOnDevice:     err == nil && readback.Assigned == !assignment.IsPauseAssignment && readback.Mode == taskMode(assignment),
 	}
 	if err != nil {
 		return view, MapDeviceError(err)
 	}
 	return view, nil
+}
+
+func taskMode(assignment domain.FacetAssignment) uint8 {
+	if assignment.IsPomodoroAssignment {
+		return 1
+	}
+	return 0
 }
 
 func (c *TimeflipDeviceClient) SetPause(ctx context.Context, handle Handle, enabled bool) error {
@@ -236,6 +273,24 @@ func (c *TimeflipDeviceClient) SetTapSettings(ctx context.Context, handle Handle
 	return MapDeviceError(err)
 }
 
+func (c *TimeflipDeviceClient) SetLEDSettings(ctx context.Context, handle Handle, settings LEDSettings) error {
+	h, err := asHandle(handle)
+	if err != nil {
+		return err
+	}
+	_, err = h.session.SetLED(ctx, settings.BrightnessPercent, settings.BlinkSeconds, timeflip.CommandOptions{})
+	return MapDeviceError(err)
+}
+
+func (c *TimeflipDeviceClient) SetDeviceName(ctx context.Context, handle Handle, name string) error {
+	h, err := asHandle(handle)
+	if err != nil {
+		return err
+	}
+	_, err = h.session.SetName(ctx, name, timeflip.CommandOptions{})
+	return MapDeviceError(err)
+}
+
 func (c *TimeflipDeviceClient) ReadHistory(ctx context.Context, handle Handle, req HistoryRequest) ([]domain.DeviceEventRecord, error) {
 	h, err := asHandle(handle)
 	if err != nil {
@@ -267,7 +322,7 @@ func (c *TimeflipDeviceClient) Events(ctx context.Context, handle Handle) (<-cha
 	if err != nil {
 		return nil, nil, err
 	}
-	events, errs, err := h.session.Events(ctx, timeflip.EventOptions{Buffer: 16})
+	events, errs, err := h.session.Events(ctx, timeflip.EventOptions{Buffer: 16, IncludeHistory: false})
 	if err != nil {
 		return nil, nil, MapDeviceError(err)
 	}
@@ -289,14 +344,28 @@ func (c *TimeflipDeviceClient) Close(ctx context.Context, handle Handle) error {
 	return MapDeviceError(h.session.Close(ctx))
 }
 
+func IsEventDecodeError(err error) bool {
+	var opErr *timeflip.OperationError
+	return errors.As(err, &opErr) && opErr.Operation == "events" && errors.Is(err, timeflip.ErrProtocol)
+}
+
 func MapDeviceError(err error) error {
 	if err == nil {
 		return nil
 	}
 	code := domain.ErrDeviceTimeout
 	message := "Device operation failed."
+	lower := strings.ToLower(err.Error())
 	if errors.Is(err, context.DeadlineExceeded) {
 		message = "Device operation timed out."
+	}
+	if strings.Contains(lower, "timeout enabling centralmanager") {
+		code = domain.ErrBluetoothUnavailable
+		message = "Bluetooth is unavailable or turned off."
+	}
+	if strings.Contains(lower, "already calling enable function") {
+		code = domain.ErrBluetoothUnavailable
+		message = "Bluetooth is still starting. Try connecting again in a moment."
 	}
 	if errors.Is(err, timeflip.ErrAuthorizationFailed) {
 		code = domain.ErrAuthorizationFailed
@@ -373,6 +442,13 @@ func mapEvent(deviceID string, event timeflip.Event) domain.DeviceEventRecord {
 	case timeflip.DoubleTapEvent:
 		record.Facet = uint8(payload.Facet)
 		record.Pause = payload.Pause
+	case timeflip.PauseStateEvent:
+		record.Pause = payload.Paused
+		if payload.Paused {
+			record.Kind = "pause"
+		} else {
+			record.Kind = "resume"
+		}
 	case timeflip.HistoryEntry:
 		record.Facet = uint8(payload.Facet)
 		record.Pause = payload.Pause
@@ -399,5 +475,5 @@ func parseHexColor(color string) (uint16, uint16, uint16) {
 	}
 	var r, g, b uint16
 	_, _ = fmt.Sscanf(color, "#%02x%02x%02x", &r, &g, &b)
-	return r, g, b
+	return r * 0x101, g * 0x101, b * 0x101
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"runtime"
@@ -13,8 +14,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/icons"
 )
 
-func Run() {
-	controller, bus, err := BuildController(context.Background())
+func RunWithOptions(opts Options) {
+	traceWriter, closeTrace, err := openBLETrace(opts.TraceBLEPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeTrace()
+
+	controller, bus, err := BuildController(context.Background(), BootstrapOptions{BLETrace: traceWriter})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -26,7 +33,7 @@ func Run() {
 			Handler: application.BundledAssetFileServer(os.DirFS("frontend/dist")),
 		},
 		Mac: application.MacOptions{
-			ActivationPolicy: application.ActivationPolicyAccessory,
+			ActivationPolicy: application.ActivationPolicyRegular,
 		},
 		Services: []application.Service{
 			application.NewService(controller),
@@ -73,7 +80,9 @@ func configureControlCentre(wailsApp *application.App, controller *Controller, w
 	}
 
 	rebuildMenu()
-	systemTray.AttachWindow(window).WindowOffset(6)
+	systemTray.OnClick(func() {
+		systemTray.OpenMenu()
+	})
 
 	for _, eventName := range []string{
 		"device.connection",
@@ -107,16 +116,31 @@ func buildControlCentreMenu(wailsApp *application.App, controller *Controller, w
 		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
 	})
 
-	deviceID, paused, hasDevice := controlCentreDevice(state)
+	target := controlCentreDevice(state)
 	toggleLabel := "Pause Tracking"
-	if paused {
+	if target.paused {
 		toggleLabel = "Resume Tracking"
 	}
-	menu.Add(toggleLabel).SetEnabled(hasDevice).OnClick(func(*application.Context) {
-		if !hasDevice {
+	menu.Add(toggleLabel).SetEnabled(target.ok).OnClick(func(*application.Context) {
+		if !target.ok {
 			return
 		}
-		if err := controller.SetPaused(deviceID, !paused); err != nil {
+		if err := controller.SetPaused(target.deviceID, !target.paused); err != nil {
+			wailsApp.Event.Emit("shell.error", err.Error())
+			return
+		}
+		wailsApp.Event.Emit("shell.refresh")
+		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
+	})
+	lockLabel := "Lock Orientation"
+	if target.locked {
+		lockLabel = "Unlock Orientation"
+	}
+	menu.Add(lockLabel).SetEnabled(target.ok).OnClick(func(*application.Context) {
+		if !target.ok {
+			return
+		}
+		if err := controller.SetLocked(target.deviceID, !target.locked); err != nil {
 			wailsApp.Event.Emit("shell.error", err.Error())
 			return
 		}
@@ -132,11 +156,21 @@ func buildControlCentreMenu(wailsApp *application.App, controller *Controller, w
 }
 
 func controlCentreStatusLabel(state services.AppState) string {
+	target := controlCentreDevice(state)
 	if state.CurrentSession != nil {
+		if target.locked {
+			return "Locked: " + state.CurrentSession.TaskLabelSnapshot
+		}
 		return "Tracking: " + state.CurrentSession.TaskLabelSnapshot
 	}
-	if _, paused, ok := controlCentreDevice(state); ok && paused {
+	if target.ok && target.paused && target.locked {
+		return "Paused and locked"
+	}
+	if target.ok && target.paused {
 		return "Paused"
+	}
+	if target.ok && target.locked {
+		return "Locked"
 	}
 	if len(state.States) > 0 {
 		return fmt.Sprintf("%s, facet %d", state.States[0].ConnectionState, state.States[0].CurrentFacet)
@@ -147,12 +181,40 @@ func controlCentreStatusLabel(state services.AppState) string {
 	return "No device configured"
 }
 
-func controlCentreDevice(state services.AppState) (string, bool, bool) {
+type controlCentreTarget struct {
+	deviceID string
+	paused   bool
+	locked   bool
+	ok       bool
+}
+
+func controlCentreDevice(state services.AppState) controlCentreTarget {
 	if len(state.States) > 0 {
-		return state.States[0].DeviceID, state.States[0].Paused, true
+		return controlCentreTarget{
+			deviceID: state.States[0].DeviceID,
+			paused:   state.States[0].Paused,
+			locked:   state.States[0].Locked,
+			ok:       true,
+		}
 	}
 	if len(state.Devices) > 0 {
-		return state.Devices[0].ID, false, true
+		return controlCentreTarget{deviceID: state.Devices[0].ID, ok: true}
 	}
-	return "", false, false
+	return controlCentreTarget{}
+}
+
+func openBLETrace(path string) (io.Writer, func(), error) {
+	if path == "" {
+		return nil, func() {}, nil
+	}
+	if path == "-" {
+		return os.Stderr, func() {}, nil
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, func() {
+		_ = file.Close()
+	}, nil
 }

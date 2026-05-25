@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
 	"github.com/mitchellrj/timeflip-desktop/internal/store"
@@ -37,7 +38,10 @@ func (s *TrackingService) ApplyDeviceSnapshot(ctx context.Context, snapshot doma
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, state.DeviceID, state.CurrentFacet)
 	if err != nil {
-		return s.PauseTracking(ctx, state.DeviceID, "unassigned_facet")
+		if isStoreNotFound(err) {
+			return s.PauseTrackingAtWithState(ctx, state.DeviceID, "unassigned_facet", state.UpdatedAt)
+		}
+		return err
 	}
 	return s.StartSessionForAssignment(ctx, state.DeviceID, assignment, domain.DeviceEventRecord{
 		DeviceID:   state.DeviceID,
@@ -55,17 +59,63 @@ func (s *TrackingService) ApplyDeviceEvent(ctx context.Context, event domain.Dev
 	if err := s.store.InsertDeviceEvent(ctx, event); err != nil {
 		return err
 	}
+	if !isTrackingEvent(event) {
+		return nil
+	}
+	if err := s.updateDeviceStateFromEvent(ctx, event); err != nil {
+		return err
+	}
 	if event.Pause {
-		return s.CloseOpenSession(ctx, event.DeviceID, event)
+		if err := s.setPausedState(ctx, event.DeviceID, true, event.OccurredAt); err != nil {
+			return err
+		}
+		return s.PauseTrackingAt(ctx, event.DeviceID, "device_pause", event.OccurredAt)
 	}
 	if event.Facet == 0 {
-		return nil
+		if err := s.setPausedState(ctx, event.DeviceID, false, event.OccurredAt); err != nil {
+			return err
+		}
+		return s.ResumeTrackingAt(ctx, event.DeviceID, "device_resume", event.OccurredAt)
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, event.DeviceID, event.Facet)
 	if err != nil {
-		return s.PauseTracking(ctx, event.DeviceID, "unassigned_facet")
+		if isStoreNotFound(err) {
+			return s.PauseTrackingAtWithState(ctx, event.DeviceID, "unassigned_facet", event.OccurredAt)
+		}
+		return err
 	}
 	return s.StartSessionForAssignment(ctx, event.DeviceID, assignment, event)
+}
+
+func isTrackingEvent(event domain.DeviceEventRecord) bool {
+	switch event.Kind {
+	case "facet", "double_tap", "history", "pause", "resume", "pause_state":
+		return true
+	default:
+		return event.Facet > 0 || event.Pause
+	}
+}
+
+func (s *TrackingService) updateDeviceStateFromEvent(ctx context.Context, event domain.DeviceEventRecord) error {
+	state, err := s.store.GetDeviceState(ctx, event.DeviceID)
+	if err != nil {
+		if !isStoreNotFound(err) {
+			return err
+		}
+		state = domain.DeviceState{DeviceID: event.DeviceID}
+	}
+	state.ConnectionState = domain.ConnectionConnected
+	if event.Facet > 0 {
+		state.CurrentFacet = event.Facet
+		state.CurrentFacetKnown = true
+		state.CurrentFacetUndefined = false
+	}
+	state.UpdatedAt = event.OccurredAt
+	if err := s.store.SaveDeviceState(ctx, state); err != nil {
+		return err
+	}
+	s.bus.Publish(ctx, "device.state", state)
+	return nil
 }
 
 func (s *TrackingService) ResolveActiveAssignment(ctx context.Context, deviceID string, facet uint8) (domain.FacetAssignment, error) {
@@ -74,12 +124,18 @@ func (s *TrackingService) ResolveActiveAssignment(ctx context.Context, deviceID 
 
 func (s *TrackingService) StartSessionForAssignment(ctx context.Context, deviceID string, assignment domain.FacetAssignment, event domain.DeviceEventRecord) error {
 	if assignment.IsPauseAssignment {
-		return s.CloseOpenSession(ctx, deviceID, event)
+		if err := s.setPausedState(ctx, deviceID, true, event.OccurredAt); err != nil {
+			return err
+		}
+		return s.PauseTrackingAt(ctx, deviceID, "pause_facet", event.OccurredAt)
+	}
+	if err := s.setPausedState(ctx, deviceID, false, event.OccurredAt); err != nil {
+		return err
 	}
 	open, err := s.store.GetOpenTaskSession(ctx, deviceID)
 	if err == nil {
 		if open.TaskID == assignment.TaskID && open.Facet == assignment.Facet {
-			return nil
+			return s.resumeOpenSession(ctx, open, event.OccurredAt)
 		}
 		if err := s.closeSession(ctx, open, event); err != nil {
 			return err
@@ -99,6 +155,10 @@ func (s *TrackingService) StartSessionForAssignment(ctx context.Context, deviceI
 }
 
 func (s *TrackingService) PauseTracking(ctx context.Context, deviceID string, source string) error {
+	return s.PauseTrackingAt(ctx, deviceID, source, s.clock.Now())
+}
+
+func (s *TrackingService) PauseTrackingAt(ctx context.Context, deviceID string, source string, pausedAt time.Time) error {
 	open, err := s.store.GetOpenTaskSession(ctx, deviceID)
 	if err != nil {
 		if isStoreNotFound(err) {
@@ -106,10 +166,33 @@ func (s *TrackingService) PauseTracking(ctx context.Context, deviceID string, so
 		}
 		return err
 	}
-	return s.closeSession(ctx, open, domain.DeviceEventRecord{DeviceID: deviceID, Source: source, OccurredAt: s.clock.Now()})
+	if open.PauseStartedAt != nil {
+		return nil
+	}
+	if pausedAt.IsZero() {
+		pausedAt = s.clock.Now()
+	}
+	pausedAt = pausedAt.UTC()
+	open.PauseStartedAt = &pausedAt
+	if err := s.store.SaveTaskSession(ctx, open); err != nil {
+		return err
+	}
+	s.bus.Publish(ctx, "tracking.session.updated", open)
+	return nil
+}
+
+func (s *TrackingService) PauseTrackingAtWithState(ctx context.Context, deviceID string, source string, pausedAt time.Time) error {
+	if err := s.setPausedState(ctx, deviceID, true, pausedAt); err != nil {
+		return err
+	}
+	return s.PauseTrackingAt(ctx, deviceID, source, pausedAt)
 }
 
 func (s *TrackingService) ResumeTracking(ctx context.Context, deviceID string, source string) error {
+	return s.ResumeTrackingAt(ctx, deviceID, source, s.clock.Now())
+}
+
+func (s *TrackingService) ResumeTrackingAt(ctx context.Context, deviceID string, source string, resumedAt time.Time) error {
 	state, err := s.store.GetDeviceState(ctx, deviceID)
 	if err != nil {
 		return err
@@ -121,7 +204,7 @@ func (s *TrackingService) ResumeTracking(ctx context.Context, deviceID string, s
 	if err != nil {
 		return nil
 	}
-	return s.StartSessionForAssignment(ctx, deviceID, assignment, domain.DeviceEventRecord{DeviceID: deviceID, Kind: "resume", Facet: state.CurrentFacet, OccurredAt: s.clock.Now(), Source: source})
+	return s.StartSessionForAssignment(ctx, deviceID, assignment, domain.DeviceEventRecord{DeviceID: deviceID, Kind: "resume", Facet: state.CurrentFacet, OccurredAt: resumedAt, Source: source})
 }
 
 func (s *TrackingService) CloseOpenSession(ctx context.Context, deviceID string, event domain.DeviceEventRecord) error {
@@ -148,6 +231,49 @@ func (s *TrackingService) closeSession(ctx context.Context, open domain.TaskSess
 		return err
 	}
 	s.bus.Publish(ctx, "tracking.session.ended", closed)
+	return nil
+}
+
+func (s *TrackingService) resumeOpenSession(ctx context.Context, open domain.TaskSession, resumedAt time.Time) error {
+	if open.PauseStartedAt == nil {
+		return nil
+	}
+	if resumedAt.IsZero() {
+		resumedAt = s.clock.Now()
+	}
+	resumedAt = resumedAt.UTC()
+	pauseStarted := open.PauseStartedAt.UTC()
+	if resumedAt.After(pauseStarted) {
+		open.PausedSeconds += uint32(resumedAt.Sub(pauseStarted).Seconds())
+	}
+	open.PauseStartedAt = nil
+	if err := s.store.SaveTaskSession(ctx, open); err != nil {
+		return err
+	}
+	s.bus.Publish(ctx, "tracking.session.updated", open)
+	return nil
+}
+
+func (s *TrackingService) setPausedState(ctx context.Context, deviceID string, paused bool, updatedAt time.Time) error {
+	state, err := s.store.GetDeviceState(ctx, deviceID)
+	if err != nil {
+		if !isStoreNotFound(err) {
+			return err
+		}
+		state = domain.DeviceState{DeviceID: deviceID}
+	}
+	if updatedAt.IsZero() {
+		updatedAt = s.clock.Now()
+	}
+	state.Paused = paused
+	state.UpdatedAt = updatedAt.UTC()
+	if state.ConnectionState == "" {
+		state.ConnectionState = domain.ConnectionConnected
+	}
+	if err := s.store.SaveDeviceState(ctx, state); err != nil {
+		return err
+	}
+	s.bus.Publish(ctx, "device.state", state)
 	return nil
 }
 

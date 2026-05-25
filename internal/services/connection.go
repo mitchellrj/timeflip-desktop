@@ -21,6 +21,7 @@ type ConnectionManager struct {
 	failureCounts map[string]int
 	firstFailure  map[string]time.Time
 	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 func NewConnectionManager(devices *DeviceService, store interface {
@@ -58,7 +59,11 @@ func (m *ConnectionManager) Start(ctx context.Context) error {
 		if profile.StoredPassword == "" || profile.PairingState == "unpaired" {
 			continue
 		}
-		go m.reconnectLoop(ctx, profile.ID)
+		m.wg.Add(1)
+		go func(deviceID string) {
+			defer m.wg.Done()
+			m.reconnectLoop(ctx, deviceID)
+		}(profile.ID)
 	}
 	return nil
 }
@@ -114,6 +119,15 @@ func (m *ConnectionManager) Stop(ctx context.Context) {
 	if m.cancel != nil {
 		m.cancel()
 	}
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
 }
 
 func (m *ConnectionManager) reconnectLoop(ctx context.Context, deviceID string) {
@@ -123,21 +137,44 @@ func (m *ConnectionManager) reconnectLoop(ctx context.Context, deviceID string) 
 			return
 		default:
 		}
+		if _, ok := m.devices.currentHandle(deviceID); ok {
+			if !sleepContext(ctx, retryIntervalOrDefault(m.config.ReconnectPolicy.InitialRetryInterval)) {
+				return
+			}
+			continue
+		}
 		if err := m.ConnectDevice(ctx, deviceID); err == nil {
-			return
+			if !sleepContext(ctx, retryIntervalOrDefault(m.config.ReconnectPolicy.InitialRetryInterval)) {
+				return
+			}
+			continue
 		}
 		m.MarkOfflineIfThresholdReached(ctx, deviceID)
 		delay := m.ScheduleReconnect(deviceID)
 		if delay == 0 {
 			delay = m.config.ReconnectPolicy.InitialRetryInterval
 		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		if !sleepContext(ctx, retryIntervalOrDefault(delay)) {
 			return
-		case <-timer.C:
 		}
+	}
+}
+
+func retryIntervalOrDefault(delay time.Duration) time.Duration {
+	if delay > 0 {
+		return delay
+	}
+	return domain.DefaultReconnectPolicy().InitialRetryInterval
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 

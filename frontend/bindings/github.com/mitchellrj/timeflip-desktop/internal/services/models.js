@@ -37,6 +37,20 @@ export class AppState {
              */
             this["states"] = [];
         }
+        if (!("tapSettings" in $$source)) {
+            /**
+             * @member
+             * @type {domain$0.DeviceTapSettings[]}
+             */
+            this["tapSettings"] = [];
+        }
+        if (!("ledSettings" in $$source)) {
+            /**
+             * @member
+             * @type {domain$0.DeviceLEDSettings[]}
+             */
+            this["ledSettings"] = [];
+        }
         if (!("tasks" in $$source)) {
             /**
              * @member
@@ -81,7 +95,9 @@ export class AppState {
         const $$createField3_0 = $$createType6;
         const $$createField4_0 = $$createType8;
         const $$createField5_0 = $$createType10;
-        const $$createField6_0 = $$createType11;
+        const $$createField6_0 = $$createType12;
+        const $$createField7_0 = $$createType14;
+        const $$createField8_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("config" in $$parsedSource) {
             $$parsedSource["config"] = $$createField0_0($$parsedSource["config"]);
@@ -92,17 +108,23 @@ export class AppState {
         if ("states" in $$parsedSource) {
             $$parsedSource["states"] = $$createField2_0($$parsedSource["states"]);
         }
+        if ("tapSettings" in $$parsedSource) {
+            $$parsedSource["tapSettings"] = $$createField3_0($$parsedSource["tapSettings"]);
+        }
+        if ("ledSettings" in $$parsedSource) {
+            $$parsedSource["ledSettings"] = $$createField4_0($$parsedSource["ledSettings"]);
+        }
         if ("tasks" in $$parsedSource) {
-            $$parsedSource["tasks"] = $$createField3_0($$parsedSource["tasks"]);
+            $$parsedSource["tasks"] = $$createField5_0($$parsedSource["tasks"]);
         }
         if ("sessions" in $$parsedSource) {
-            $$parsedSource["sessions"] = $$createField4_0($$parsedSource["sessions"]);
+            $$parsedSource["sessions"] = $$createField6_0($$parsedSource["sessions"]);
         }
         if ("facetConfigs" in $$parsedSource) {
-            $$parsedSource["facetConfigs"] = $$createField5_0($$parsedSource["facetConfigs"]);
+            $$parsedSource["facetConfigs"] = $$createField7_0($$parsedSource["facetConfigs"]);
         }
         if ("currentSession" in $$parsedSource) {
-            $$parsedSource["currentSession"] = $$createField6_0($$parsedSource["currentSession"]);
+            $$parsedSource["currentSession"] = $$createField8_0($$parsedSource["currentSession"]);
         }
         return new AppState(/** @type {Partial<AppState>} */($$parsedSource));
     }
@@ -114,10 +136,14 @@ const $$createType1 = domain$0.DeviceProfileView.createFrom;
 const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = domain$0.DeviceState.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = domain$0.Task.createFrom;
+const $$createType5 = domain$0.DeviceTapSettings.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = domain$0.TaskSession.createFrom;
+const $$createType7 = domain$0.DeviceLEDSettings.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = domain$0.FacetConfigurationView.createFrom;
+const $$createType9 = domain$0.Task.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = $Create.Nullable($$createType7);
+const $$createType11 = domain$0.TaskSession.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = domain$0.FacetConfigurationView.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = $Create.Nullable($$createType11);

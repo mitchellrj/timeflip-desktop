@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -11,7 +12,11 @@ import (
 	"github.com/mitchellrj/timeflip-desktop/internal/store"
 )
 
-func BuildController(ctx context.Context) (*Controller, *WailsEventBus, error) {
+type BootstrapOptions struct {
+	BLETrace io.Writer
+}
+
+func BuildController(ctx context.Context, opts BootstrapOptions) (*Controller, *WailsEventBus, error) {
 	dataDir, err := os.UserConfigDir()
 	if err != nil {
 		dataDir = "."
@@ -41,7 +46,7 @@ func BuildController(ctx context.Context) (*Controller, *WailsEventBus, error) {
 	}
 	bus := NewWailsEventBus()
 	clock := services.SystemClock{}
-	devClient, err := device.NewNativeDeviceClient(domain.DefaultTimeout)
+	devClient, err := device.NewNativeDeviceClientWithOptions(domain.DefaultTimeout, device.NativeClientOptions{TraceBLE: opts.BLETrace})
 	if err != nil {
 		_ = st.Close()
 		return nil, nil, err

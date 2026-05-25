@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
@@ -22,6 +23,11 @@ func NewTaskService(store store.Store, clock Clock) *TaskService {
 }
 
 func (s *TaskService) CreateTask(ctx context.Context, label string, icon string, color string) (domain.Task, error) {
+	if existing, ok, err := s.findTaskByLabel(ctx, label, ""); err != nil {
+		return domain.Task{}, err
+	} else if ok {
+		return domain.Task{}, duplicateTaskLabelError(existing.Label)
+	}
 	task := domain.Task{
 		ID:        domain.NewID("task"),
 		Label:     label,
@@ -37,6 +43,11 @@ func (s *TaskService) CreateTask(ctx context.Context, label string, icon string,
 }
 
 func (s *TaskService) UpdateTask(ctx context.Context, task domain.Task) (domain.Task, error) {
+	if existing, ok, err := s.findTaskByLabel(ctx, task.Label, task.ID); err != nil {
+		return domain.Task{}, err
+	} else if ok {
+		return domain.Task{}, duplicateTaskLabelError(existing.Label)
+	}
 	if task.UpdatedAt.IsZero() {
 		task.UpdatedAt = s.clock.Now()
 	}
@@ -57,22 +68,35 @@ func (s *TaskService) AssignFacet(ctx context.Context, req domain.FacetConfigura
 		Facet:                req.Facet,
 		TaskID:               req.TaskID,
 		IsPauseAssignment:    req.IsPauseAssignment,
+		IsPomodoroAssignment: req.IsPomodoroAssignment,
 		PomodoroLimitSeconds: req.PomodoroLimitSeconds,
 		EffectiveFrom:        s.clock.Now(),
 	}
 	if req.IsPauseAssignment {
+		assignment.IsPomodoroAssignment = false
+		assignment.PomodoroLimitSeconds = 0
 		assignment.TaskLabelSnapshot = "Paused"
 		assignment.TaskIconSnapshot = "pause"
 		assignment.TaskColorSnapshot = "#64748B"
 	} else {
+		if !req.IsPomodoroAssignment {
+			assignment.PomodoroLimitSeconds = 0
+		}
 		task := domain.Task{ID: req.TaskID, Label: req.Label, Icon: req.Icon, Color: req.Color, CreatedAt: time.Now().UTC()}
 		if req.TaskID == "" {
-			created, err := s.CreateTask(ctx, req.Label, req.Icon, req.Color)
-			if err != nil {
+			if existing, ok, err := s.findTaskByLabel(ctx, req.Label, ""); err != nil {
 				return domain.FacetAssignment{}, err
+			} else if ok {
+				task = existing
+				assignment.TaskID = existing.ID
+			} else {
+				created, err := s.CreateTask(ctx, req.Label, req.Icon, req.Color)
+				if err != nil {
+					return domain.FacetAssignment{}, err
+				}
+				task = created
+				assignment.TaskID = created.ID
 			}
-			task = created
-			assignment.TaskID = created.ID
 		}
 		assignment.TaskLabelSnapshot = task.Label
 		assignment.TaskIconSnapshot = task.Icon
@@ -98,13 +122,14 @@ func (s *TaskService) ListFacetConfiguration(ctx context.Context, deviceID strin
 	}
 	views := make([]domain.FacetConfigurationView, 0, domain.FacetCount)
 	for facet := uint8(1); facet <= domain.FacetCount; facet++ {
-		view := domain.FacetConfigurationView{Facet: facet}
+		view := domain.FacetConfigurationView{DeviceID: deviceID, Facet: facet}
 		if assignment, ok := byFacet[facet]; ok {
 			view.TaskID = assignment.TaskID
 			view.Label = assignment.TaskLabelSnapshot
 			view.Icon = assignment.TaskIconSnapshot
 			view.Color = assignment.TaskColorSnapshot
 			view.IsPauseAssignment = assignment.IsPauseAssignment
+			view.IsPomodoroAssignment = assignment.IsPomodoroAssignment
 			view.PomodoroLimitSeconds = assignment.PomodoroLimitSeconds
 			view.AssignedOnDevice = assignment.ConfirmedOnDevice
 		}
@@ -119,10 +144,39 @@ func (s *TaskService) SetPomodoroForFacet(ctx context.Context, deviceID string, 
 		return domain.FacetAssignment{}, err
 	}
 	assignment.PomodoroLimitSeconds = seconds
+	assignment.IsPomodoroAssignment = seconds > 0
 	if err := domain.ValidateFacetAssignment(assignment); err != nil {
 		return domain.FacetAssignment{}, err
 	}
 	return assignment, s.store.SaveFacetAssignment(ctx, assignment)
+}
+
+func (s *TaskService) findTaskByLabel(ctx context.Context, label string, excludeID string) (domain.Task, bool, error) {
+	needle := normaliseTaskLabel(label)
+	if needle == "" {
+		return domain.Task{}, false, nil
+	}
+	tasks, err := s.store.ListTasks(ctx, false)
+	if err != nil {
+		return domain.Task{}, false, err
+	}
+	for _, task := range tasks {
+		if task.ID == excludeID {
+			continue
+		}
+		if normaliseTaskLabel(task.Label) == needle {
+			return task, true, nil
+		}
+	}
+	return domain.Task{}, false, nil
+}
+
+func duplicateTaskLabelError(label string) error {
+	return domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "A task with this label already exists.", "duplicate task label: "+label, nil)}
+}
+
+func normaliseTaskLabel(label string) string {
+	return strings.ToLower(strings.Join(strings.Fields(label), " "))
 }
 
 func IsNotFound(err error) bool {

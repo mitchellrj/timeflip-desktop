@@ -19,6 +19,8 @@ type Client interface {
 	SetLock(context.Context, Handle, bool) error
 	SetAutoPause(context.Context, Handle, uint16) error
 	SetTapSettings(context.Context, Handle, TapSettings) error
+	SetLEDSettings(context.Context, Handle, LEDSettings) error
+	SetDeviceName(context.Context, Handle, string) error
 	ReadHistory(context.Context, Handle, HistoryRequest) ([]domain.DeviceEventRecord, error)
 	Events(context.Context, Handle) (<-chan domain.DeviceEventRecord, <-chan error, error)
 	Close(context.Context, Handle) error
@@ -62,4 +64,9 @@ type TapSettings struct {
 	Limit      uint8
 	Latency    uint8
 	Window     uint8
+}
+
+type LEDSettings struct {
+	BrightnessPercent uint8
+	BlinkSeconds      uint8
 }

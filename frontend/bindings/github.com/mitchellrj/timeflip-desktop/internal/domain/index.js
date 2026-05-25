@@ -5,8 +5,10 @@
 export {
     AppConfig,
     ConnectionState,
+    DeviceLEDSettings,
     DeviceProfileView,
     DeviceState,
+    DeviceTapSettings,
     DiscoveredDevice,
     FacetConfigurationRequest,
     FacetConfigurationView,

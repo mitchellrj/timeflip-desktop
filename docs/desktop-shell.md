@@ -34,6 +34,6 @@ The tray is created with `app.SystemTray.New()`, uses the Wails macOS template t
 - Pause Tracking / Resume Tracking for the first known device.
 - Quit.
 
-The main window is attached to the tray with `AttachWindow(window).WindowOffset(6)`, so the same status item can act as the app's control-centre surface. Window close hides the window instead of terminating the app; Quit remains explicit from the tray menu.
+The app uses `ActivationPolicyRegular` on macOS so the main window behaves like an ordinary application window: it appears in app switching, participates in normal focus ordering, and is not attached to the tray as a floating popover. Tray clicks open the control-centre menu. Window close hides the window instead of terminating the app; Quit remains explicit from the tray menu.
 
 Because Wails v3 is still alpha, packaging and manual macOS tray QA remain tracked in `TODO.md`.

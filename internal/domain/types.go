@@ -107,6 +107,7 @@ type FacetAssignment struct {
 	TaskIconSnapshot     string    `json:"taskIconSnapshot"`
 	TaskColorSnapshot    string    `json:"taskColorSnapshot"`
 	IsPauseAssignment    bool      `json:"isPauseAssignment"`
+	IsPomodoroAssignment bool      `json:"isPomodoroAssignment"`
 	PomodoroLimitSeconds uint32    `json:"pomodoroLimitSeconds"`
 	EffectiveFrom        time.Time `json:"effectiveFrom"`
 	ConfirmedOnDevice    bool      `json:"confirmedOnDevice"`
@@ -120,16 +121,19 @@ type FacetConfigurationRequest struct {
 	Icon                 string `json:"icon"`
 	Color                string `json:"color"`
 	IsPauseAssignment    bool   `json:"isPauseAssignment"`
+	IsPomodoroAssignment bool   `json:"isPomodoroAssignment"`
 	PomodoroLimitSeconds uint32 `json:"pomodoroLimitSeconds"`
 }
 
 type FacetConfigurationView struct {
+	DeviceID             string `json:"deviceID"`
 	Facet                uint8  `json:"facet"`
 	TaskID               string `json:"taskID"`
 	Label                string `json:"label"`
 	Icon                 string `json:"icon"`
 	Color                string `json:"color"`
 	IsPauseAssignment    bool   `json:"isPauseAssignment"`
+	IsPomodoroAssignment bool   `json:"isPomodoroAssignment"`
 	PomodoroLimitSeconds uint32 `json:"pomodoroLimitSeconds"`
 	AssignedOnDevice     bool   `json:"assignedOnDevice"`
 }
@@ -145,6 +149,42 @@ type DeviceState struct {
 	BatteryPercent        uint8           `json:"batteryPercent"`
 	SystemStatus          string          `json:"systemStatus"`
 	UpdatedAt             time.Time       `json:"updatedAt"`
+}
+
+type DeviceTapSettings struct {
+	DeviceID          string    `json:"deviceID"`
+	Threshold         uint8     `json:"threshold"`
+	Limit             uint8     `json:"limit"`
+	Latency           uint8     `json:"latency"`
+	Window            uint8     `json:"window"`
+	ConfirmedOnDevice bool      `json:"confirmedOnDevice"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+func DefaultDeviceTapSettings(deviceID string) DeviceTapSettings {
+	return DeviceTapSettings{
+		DeviceID:  deviceID,
+		Threshold: 20,
+		Limit:     10,
+		Latency:   5,
+		Window:    30,
+	}
+}
+
+type DeviceLEDSettings struct {
+	DeviceID          string    `json:"deviceID"`
+	BrightnessPercent uint8     `json:"brightnessPercent"`
+	BlinkSeconds      uint8     `json:"blinkSeconds"`
+	ConfirmedOnDevice bool      `json:"confirmedOnDevice"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+func DefaultDeviceLEDSettings(deviceID string) DeviceLEDSettings {
+	return DeviceLEDSettings{
+		DeviceID:          deviceID,
+		BrightnessPercent: 50,
+		BlinkSeconds:      10,
+	}
 }
 
 type DeviceEventRecord struct {
@@ -170,6 +210,8 @@ type TaskSession struct {
 	StartedAt         time.Time  `json:"startedAt"`
 	EndedAt           *time.Time `json:"endedAt,omitempty"`
 	DurationSeconds   uint32     `json:"durationSeconds"`
+	PausedSeconds     uint32     `json:"pausedSeconds"`
+	PauseStartedAt    *time.Time `json:"pauseStartedAt,omitempty"`
 	Source            string     `json:"source"`
 	StartEventNumber  uint32     `json:"startEventNumber"`
 	EndEventNumber    uint32     `json:"endEventNumber"`
@@ -225,4 +267,5 @@ type DeviceSnapshot struct {
 	State         DeviceState              `json:"state"`
 	FacetConfigs  []FacetConfigurationView `json:"facetConfigs"`
 	TapConfigured bool                     `json:"tapConfigured"`
+	TapSettings   DeviceTapSettings        `json:"tapSettings"`
 }

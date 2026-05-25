@@ -55,6 +55,41 @@ export class PairDeviceRequest {
     }
 }
 
+export class SaveDeviceNameRequest {
+    /**
+     * Creates a new SaveDeviceNameRequest instance.
+     * @param {Partial<SaveDeviceNameRequest>} [$$source = {}] - The source object to create the SaveDeviceNameRequest.
+     */
+    constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SaveDeviceNameRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SaveDeviceNameRequest}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SaveDeviceNameRequest(/** @type {Partial<SaveDeviceNameRequest>} */($$parsedSource));
+    }
+}
+
 export class SaveTaskRequest {
     /**
      * Creates a new SaveTaskRequest instance.
