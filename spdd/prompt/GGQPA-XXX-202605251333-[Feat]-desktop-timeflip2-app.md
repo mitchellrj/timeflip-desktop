@@ -70,6 +70,7 @@ class FacetAssignment {
     +string taskIconSnapshot
     +string taskColorSnapshot
     +bool isPauseAssignment
+    +bool isPomodoroAssignment
     +uint32 pomodoroLimitSeconds
     +time effectiveFrom
     +bool confirmedOnDevice
@@ -94,6 +95,14 @@ class DeviceTapSettings {
     +uint8 limit
     +uint8 latency
     +uint8 window
+    +bool confirmedOnDevice
+    +time updatedAt
+}
+
+class DeviceLEDSettings {
+    +string deviceID
+    +uint8 brightnessPercent
+    +uint8 blinkSeconds
     +bool confirmedOnDevice
     +time updatedAt
 }
@@ -165,6 +174,7 @@ class FacetConfigurationRequest {
     +string icon
     +string color
     +bool isPauseAssignment
+    +bool isPomodoroAssignment
     +uint32 pomodoroLimitSeconds
 }
 
@@ -176,6 +186,7 @@ class FacetConfigurationView {
     +string icon
     +string color
     +bool isPauseAssignment
+    +bool isPomodoroAssignment
     +uint32 pomodoroLimitSeconds
     +bool assignedOnDevice
 }
@@ -186,6 +197,7 @@ DeviceProfile "1" -- "0..12" FacetAssignment : has current assignments
 Task "1" -- "0..*" FacetAssignment : mapped to facets
 DeviceProfile "1" -- "1" DeviceState : reports latest state
 DeviceProfile "1" -- "1" DeviceTapSettings : stores tap settings
+DeviceProfile "1" -- "1" DeviceLEDSettings : stores LED settings
 DeviceProfile "1" -- "0..*" DeviceEventRecord : records raw interpreted events
 DeviceEventRecord "0..*" --> "0..*" TaskSession : reconciles into
 Task "1" -- "0..*" TaskSession : snapshot into sessions
@@ -208,7 +220,8 @@ FacetAssignment --> FacetConfigurationView : displays
 2. Device Integration:
    - Consume `github.com/mitchellrj/timeflip-go` as the device integration boundary and use its macOS transport for BLE scanning, pairing, connection, authorization, state reads, configuration writes, history reads, and event streaming.
    - Wrap `timeflip-go` in app-owned service interfaces so UI and persistence code never depend directly on raw BLE session objects.
-   - Store TimeFlip passwords in local app configuration for the initial implementation, use them for automatic authorization, and redact them in logs and diagnostics.
+   - Store TimeFlip passwords in the local device profile/config store for the initial implementation, use them for automatic authorization, and redact them in logs and diagnostics.
+   - Treat the device display name as app-owned desired state and the advertised name as device-confirmed state; write pending name changes on the next successful connection.
    - Support an explicit `--trace-ble PATH` diagnostic flag that wraps the transport and writes raw BLE operations for hardware debugging; this trace is opt-in and may include password bytes.
 
 3. Local Persistence:
@@ -227,23 +240,26 @@ FacetAssignment --> FacetConfigurationView : displays
    - Use stage-based pairing and unpairing presentation, preserving partial progress and manual-action instructions returned by the library.
    - Use the default reconnection policy: scan immediately after launch or disconnect, retry every 15 seconds for 2 minutes, every 60 seconds until 15 minutes, then every 5 minutes while the app is open; mark a device offline after 3 consecutive failures or 2 minutes without success.
    - Treat the facet characteristic (`F1196F52`) as authoritative for current facet changes; ignore promoted text-side facet events from `F1196F51` when they would otherwise roll back state.
+   - Check system Bluetooth availability before connection attempts and rebuild the adapter after macOS CentralManager enable failures so manual reconnect does not loop on stale adapter state.
 
 ## Structure
 
 ### Inheritance Relationships
 1. `DeviceClient` interface defines scan, pair, unpair, connect, read, write, history, and event-stream contracts used by app services.
 2. `TimeflipDeviceClient` implements `DeviceClient` by delegating to `timeflip-go` client, session, and macOS transport objects.
-3. `Store` interface defines transactional persistence contracts for device profiles, app config, tasks, assignments, events, sessions, and migrations.
-4. `SQLiteStore` implements `Store` using SQLite and schema migrations.
-5. `Clock` interface defines current time for tracking and tests; `SystemClock` implements real wall-clock time.
-6. `EventBus` interface defines app state publication from Go services to the Wails frontend; `WailsEventBus` implements it using Wails runtime events.
-7. `AppError` struct provides domain-classified error codes, safe user messages, redacted diagnostic messages, and wrapped causes.
-8. `DeviceWorkflowError`, `PersistenceError`, `ValidationError`, and `TrackingError` classify failures by responsibility area and map to `AppError`.
+3. `preflightClient` wraps `DeviceClient` with a system Bluetooth availability check before scan, pair, and connect operations.
+4. `adapterRecoveryClient` wraps `DeviceClient` creation and rebuilds the native adapter after macOS CentralManager enable failures.
+5. `Store` interface defines transactional persistence contracts for device profiles, app config, tasks, assignments, settings, events, sessions, and migrations.
+6. `SQLiteStore` implements `Store` using SQLite and schema migrations.
+7. `Clock` interface defines current time for tracking and tests; `SystemClock` implements real wall-clock time.
+8. `EventBus` interface defines app state publication from Go services to the Wails frontend; `WailsEventBus` implements it using Wails runtime events.
+9. `AppError` struct provides domain-classified error codes, safe user messages, redacted diagnostic messages, and wrapped causes.
+10. `DeviceWorkflowError`, `PersistenceError`, `ValidationError`, and `TrackingError` classify failures by responsibility area and map to `AppError`.
 
 ### Dependencies
 1. Wails frontend calls `AppController` methods exposed from the Go backend.
 2. `AppController` depends on `DeviceService`, `ConfigService`, `TaskService`, `TrackingService`, and `HistoryService`.
-3. `DeviceService` depends on `DeviceClient`, `Store`, `EventBus`, `Clock`, and `ConfigService`.
+3. `DeviceService` depends on `DeviceClient`, `Store`, `TaskService`, `TrackingService`, `HistoryService`, `EventBus`, and `Clock`.
 4. `ConnectionManager` depends on `DeviceClient`, `Store`, `TrackingService`, `HistoryService`, `EventBus`, `Clock`, and reconnect timers.
 5. `TaskService` depends on `Store` and validates task and facet assignment changes.
 6. `TrackingService` depends on `Store` and converts device state/events into active task-session changes.
@@ -252,6 +268,7 @@ FacetAssignment --> FacetConfigurationView : displays
 9. `SQLiteStore` depends only on the SQLite driver, migration files, context, and logger.
 10. Frontend view components depend on backend DTOs and Wails bindings, not on SQLite or `timeflip-go` types.
 11. `traceLogger`, `tracingTransport`, and `tracingConnection` wrap the native transport only when `--trace-ble` is supplied.
+12. `frontend/dist` is generated build output and should be refreshed for local runs/packages but not treated as hand-authored source.
 
 ### Layered Architecture
 1. Desktop Shell Layer: Wails bootstrap, window lifecycle, system tray setup, frontend asset binding, and application startup/shutdown.
@@ -293,15 +310,19 @@ FacetAssignment --> FacetConfigurationView : displays
    - `FacetAssignment`: maps a device facet to a task, snapshots task label/icon/colour, stores optional Pomodoro limit, pause-side intent, effective timestamp, and device confirmation status.
    - `DeviceState`: stores current connection, facet, known/undefined facet state, pause, lock, battery, system, and update state.
    - `DeviceTapSettings`: stores local tap threshold, limit, latency, window, confirmation status, and update timestamp per device.
+   - `DeviceLEDSettings`: stores LED brightness percent, LED blink interval, confirmation status, and update timestamp per device.
    - `DeviceEventRecord`: stores normalized raw/interpreted device events for idempotent history reconciliation.
    - `TaskSession`: stores interpreted work intervals with task assignment snapshot, pause duration, open pause start, and source event boundaries.
 3. Methods:
    - `ValidateDeviceProfile(profile)`: ensure device ID is present and password length is either empty or six characters.
+   - `ValidateDeviceName(name)`: ensure device name is present, at most 18 bytes, and printable ASCII for TimeFlip2 command support.
    - `ValidateTask(task)`: ensure label is present, icon is optional but bounded, and colour is a valid app colour value.
-   - `ValidateFacetAssignment(assignment)`: ensure facet is in the TimeFlip2 range, pause assignment and task assignment are coherent, and Pomodoro duration is non-negative.
+   - `ValidateFacetAssignment(assignment)`: ensure facet is in the TimeFlip2 range, pause assignment and task assignment are coherent, Pomodoro mode is explicit, and Pomodoro duration is present only for Pomodoro assignments.
+   - `ValidateDeviceLEDSettings(settings)`: ensure LED brightness is 1-100 percent and blink interval is 5-60 seconds.
    - `StartTaskSession(deviceID, assignment, event)`: create a new session snapshot from the active assignment.
    - `EndTaskSession(session, eventOrTime)`: close a running session with a non-negative duration.
    - `DefaultDeviceTapSettings(deviceID)`: provide sensible local tap defaults of threshold 20, limit 10, latency 5, and window 30.
+   - `DefaultDeviceLEDSettings(deviceID)`: provide sensible local LED defaults of brightness 50 percent and blink interval 10 seconds.
 4. Constraints:
    - Labels and icons are local-only and are never sent to `timeflip-go`.
    - Facet reassignment only changes future records; existing `TaskSession` rows must retain their task snapshot.
@@ -318,16 +339,18 @@ FacetAssignment --> FacetConfigurationView : displays
    - `SaveFacetAssignment(ctx, assignment)`, `ListFacetAssignments(ctx, deviceID)`: persist current/future facet mappings.
    - `SaveDeviceState(ctx, state)`, `GetDeviceState(ctx, deviceID)`: persist latest state for dashboard and system tray startup display.
    - `SaveDeviceTapSettings(ctx, settings)`, `GetDeviceTapSettings(ctx, deviceID)`, `ListDeviceTapSettings(ctx)`: persist per-device tap configuration and confirmation status.
+   - `SaveDeviceLEDSettings(ctx, settings)`, `GetDeviceLEDSettings(ctx, deviceID)`, `ListDeviceLEDSettings(ctx)`: persist per-device LED configuration and confirmation status.
    - `InsertDeviceEvent(ctx, event)`: insert idempotently by device ID, event number where present, kind, and occurrence timestamp.
    - `ListDeviceEvents(ctx, deviceID)`: returns stored events for idempotent history merge and reconciliation checks.
    - `SaveTaskSession(ctx, session)`, `ListTaskSessions(ctx, filter)`, `GetOpenTaskSession(ctx, deviceID)`: manage interpreted history.
-   - `SaveConfig(ctx, config)`, `LoadConfig(ctx)`: persist app settings including reconnect policy and stored passwords in the initial app-config model.
+   - `SaveConfig(ctx, config)`, `LoadConfig(ctx)`: persist app settings including reconnect policy; device profiles persist stored TimeFlip passwords in the initial local configuration model.
 3. Transaction Management:
    - Use transactions for assignment changes that close/open sessions.
    - Use transactions for history import batches so event records and task sessions remain consistent.
 4. Constraints:
    - Schema must include uniqueness constraints for idempotent event/history imports.
    - Schema must store task-session pause totals and open pause start time so active sessions can count up accurately in the UI.
+   - Schema must preserve pending device profile display names separately from advertised names until the device confirms the write.
    - Migration tests must run against an empty database and a second migration pass.
    - Stored passwords must never be printed in migration, query, or error logs.
 
@@ -341,7 +364,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - `Authorize(ctx, handle, password)`: authorizes using the stored app-config password or explicit pairing password.
    - `ReadDeviceSnapshot(ctx, handle)`: reads info, battery, system state where supported, tracker status, task parameters for facets, and tap settings.
    - `WriteFacetConfiguration(ctx, handle, assignment)`: writes supported device-backed colour, task parameters, and Pomodoro values, then requests readback.
-   - `SetPause(ctx, handle, enabled)`, `SetLock(ctx, handle, enabled)`, `SetAutoPause(ctx, handle, minutes)`, `SetTapSettings(ctx, handle, settings)`: map app controls to library commands.
+   - `SetPause(ctx, handle, enabled)`, `SetLock(ctx, handle, enabled)`, `SetAutoPause(ctx, handle, minutes)`, `SetTapSettings(ctx, handle, settings)`, `SetLEDSettings(ctx, handle, settings)`, `SetDeviceName(ctx, handle, name)`: map app controls to library commands.
    - `ReadHistory(ctx, handle, request)`: imports device history entries from the configured start point.
    - `Events(ctx, handle)`: starts technical event streaming and returns app-normalized event and error channels.
    - `Close(ctx, handle)`: closes active session and stops associated streams.
@@ -352,6 +375,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - Map unsupported OS pair/unpair to manual-action status instead of a fatal application error.
    - Redact password values and raw password characteristic bytes from diagnostics.
    - Preserve raw BLE trace output only when explicitly requested; callers must treat trace files as sensitive because password bytes may be present.
+   - Treat history packets with library-supported 17-byte single-record and 20/21-byte stream payload shapes as library-owned parsing; the app should map parsed entries, not reparse raw payloads.
 4. Constraints:
    - Only this adapter may import `github.com/mitchellrj/timeflip-go` packages.
    - Adapter tests should use fake device clients or fake library transports where available; CI must not require physical BLE hardware.
@@ -361,23 +385,27 @@ FacetAssignment --> FacetConfigurationView : displays
 1. Interface Definition: `DeviceService` exposes user-facing workflows independent of Wails or frontend details.
 2. Core Methods:
    - `ListDevices(ctx)`: scans for TimeFlip2 devices, records last-seen metadata for known devices, and returns UI-ready device cards.
-   - `PairDevice(ctx, deviceID, password, newPassword, allowOSPairing)`: runs staged pairing, stores or updates the device profile, stores the chosen password in app config, and emits workflow-state events.
+   - `PairDevice(ctx, deviceID, password, newPassword, allowOSPairing)`: runs staged pairing, stores or updates the device profile, stores the chosen password locally, and emits workflow-state events.
    - `UnpairDevice(ctx, deviceID, factoryReset, allowOSUnpairing)`: runs staged unpairing and marks or removes the device profile according to completed/manual-action state.
    - `RefreshDeviceState(ctx, deviceID)`: connects/uses active session, authorizes with stored password, reads current device state, saves it, and emits frontend/system tray updates.
    - `ConfigureFacet(ctx, request)`: persists local assignment, writes supported device-backed values when connected, verifies readback where possible, and returns current facet view.
    - `ConfigureTapPause(ctx, request)`: updates tap, pause, auto-pause, or pause-side assignment according to the selected control.
    - `ConfigureTapSettings(ctx, settings)`: persists tap threshold/limit/latency/window, writes them to an active device when possible, and marks confirmation state.
+   - `ConfigureLEDSettings(ctx, settings)`: persists LED brightness/blink values, writes them to an active device when possible, and marks confirmation state.
+   - `ConfigureDeviceName(ctx, deviceID, name)`: validates a 1-18 printable ASCII name, stores it as desired display name, writes it to an active device when possible, and keeps it pending for next connect otherwise.
    - `SetPaused(ctx, deviceID, paused)`: writes pause state to the device when connected and updates tracking interpretation.
+   - `SetLocked(ctx, deviceID, locked)`: writes lock state to the device and updates current state.
    - `ConnectDevice(ctx, deviceID)`: connects, authorizes, applies unconfirmed stored tap settings, imports device history, reads current snapshot, and starts the event stream.
    - `DisconnectDevice(ctx, deviceID)`: stops event streaming, closes the handle, removes cached connection state, and marks the device disconnected.
 3. Dependency Injection:
    - Depends on `DeviceClient`, `Store`, `TaskService`, `TrackingService`, `HistoryService`, `EventBus`, and `Clock`.
 4. Transaction Management:
-   - Persist local assignment changes before device writes, then mark device confirmation status after readback.
+   - Persist local assignment/settings/name changes before device writes, then mark device confirmation status after readback or command success.
    - Use compensating status rather than deleting local assignments if device readback fails.
 5. Constraints:
    - Pairing and unpairing must expose all library stages and manual actions.
    - Configuration requests must distinguish local-only labels/icons from device-backed colour/task/Pomodoro values.
+   - Unconfirmed tap, LED, facet, and device-name values must be retried on next connection without blocking the rest of the connection flow.
    - Event streaming must ignore promoted text facet events from the TimeFlip events characteristic and process only authoritative facet/history/tap tracking events.
 
 ### Implement Connection Manager - Automatic Reconnect and Event Stream Lifecycle
@@ -445,15 +473,15 @@ FacetAssignment --> FacetConfigurationView : displays
    - `CreateTask(ctx, label, icon, color)`: creates a local task with validation.
    - `UpdateTask(ctx, task)`: updates local task metadata without rewriting historical session snapshots.
    - `ArchiveTask(ctx, taskID)`: hides task from future assignment while preserving history.
-   - `AssignFacet(ctx, request)`: maps a facet to a task or pause side and creates a new effective assignment.
+   - `AssignFacet(ctx, request)`: maps a facet to a task, explicit Pomodoro task, or pause side and creates a new effective assignment.
    - `ListFacetConfiguration(ctx, deviceID)`: returns 12 facet configuration views combining local assignments and current device-backed read state.
-   - `SetPomodoroForFacet(ctx, deviceID, facet, seconds)`: stores local Pomodoro intent and requests device-backed write when connected.
    - `findTaskByLabel(ctx, label, excludeID)`: reuses an existing active task with the same normalized label to prevent duplicate task choices.
 3. Constraints:
    - The UI must allow all 12 facets to be inspected.
    - Labels and icons remain local-only.
    - Colour is local metadata and may also be written to device facet colour when connected and supported.
-   - A facet can have either a task assignment or pause-side assignment at a time.
+   - A facet can have either a task assignment, Pomodoro assignment, or pause-side assignment at a time.
+   - Pomodoro duration is configured only when the facet type is Pomodoro; zero-duration implicit-disable behaviour is not part of the UI contract.
    - Task selection lists must de-duplicate labels while preserving the currently selected task when editing an existing assignment.
 
 ### Implement Wails Backend Controller - UI Contract
@@ -468,22 +496,26 @@ FacetAssignment --> FacetConfigurationView : displays
    - `SaveTask(request)`: creates or updates a local task.
    - `SaveFacetAssignment(request)`: updates local assignment and device-backed configuration where possible.
    - `SetPaused(deviceID, paused)`: toggles pause state.
+   - `SetLocked(deviceID, locked)`: toggles orientation lock state.
    - `SaveTapPauseSettings(request)`: updates the current pause state through the device service.
    - `SaveTapSettings(settings)`: saves and writes tap threshold/limit/latency/window settings for the selected device.
+   - `SaveLEDSettings(settings)`: saves and writes LED brightness/blink settings for the selected device.
+   - `SaveDeviceName(request)`: saves and writes the selected device name or queues it for next connect.
    - `ListTaskSessions(filter)`: returns task-session history.
    - `SaveSettings(request)`: updates app config and reconnect policy values.
 3. Constraints:
    - Backend methods return DTOs safe for frontend display and never expose stored password values.
    - Long-running operations emit progress events rather than blocking the UI without feedback.
-   - `GetAppState()` must return states, tap settings, and facet configurations for all known devices so the selected-device UI cannot show another device's stale facet.
+   - `GetAppState()` must return states, tap settings, LED settings, and facet configurations for all known devices so the selected-device UI cannot show another device's stale facet.
 
 ### Implement Frontend Experience - Dashboard, Device Workflows, Facets, History, Settings
 1. Responsibility: Build the user-facing Wails frontend as a compact desktop application for repeated daily use.
 2. Views:
    - Dashboard: active device connection, current task, current facet, pause/lock/battery/system status, and quick pause control.
-   - Device Setup: scan list, pairing wizard, manual-action instructions, password entry, and unpairing workflow.
+   - Device Setup: scan list, device-name editing, pairing wizard, manual-action instructions, password entry, and unpairing workflow.
    - Facets: 12-facet assignment editor with task label, icon, colour, Pomodoro duration, pause-side option, and device confirmation state.
    - Tap Settings: numeric controls for threshold, limit, latency, and window with local/default/confirmed-on-device status.
+   - LED Settings: numeric controls for brightness percent and blink seconds with local/default/confirmed-on-device status.
    - History: task-session list with task name, colour, start time, live duration, paused time, and end time for completed sessions.
    - Settings: stored devices, reconnect policy defaults, timeout settings, tap settings, and password update flow without displaying existing password values.
 3. Interaction Logic:
@@ -528,11 +560,11 @@ FacetAssignment --> FacetConfigurationView : displays
 2. Test Areas:
    - Domain validation tests for devices, tasks, assignments, pause side, and session boundaries.
    - SQLite migration and repository tests using temporary databases.
-   - Device service tests using fake `DeviceClient` for scan, pair, connect, readback mismatch, wrong password, manual action, and unpair flows.
+   - Device service tests using fake `DeviceClient` for scan, pair, connect, readback mismatch, wrong password, manual action, settings writes, device-name writes, and unpair flows.
    - Connection manager tests for reconnect cadence, offline thresholds, duplicate session prevention, and shutdown cleanup.
    - Tracking/history tests for facet changes, pause side, lock state, reconnect import, duplicate events, and reassignment preserving history.
    - Device event tests for ignoring stale text-side facet events from `F1196F51` and preserving authoritative facet state from `F1196F52`.
-   - Frontend formatting tests for config duration conversion, tap settings forms, and user-safe error messages.
+   - Frontend formatting tests for config duration conversion, tap settings forms, LED settings forms, and user-safe error messages.
    - Frontend smoke tests for major views where the project tooling supports them.
 3. Hardware Smoke Checklist:
    - Scan and pair a supported TimeFlip2 device on macOS.
@@ -543,6 +575,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - Verify dashboard/header facet updates immediately on flip and does not roll back when a stale `New Side` text notification arrives.
    - Disconnect/reconnect and verify history import does not duplicate sessions.
    - Unpair with manual-action handling visible when OS-level operation is unsupported.
+   - Save device name, LED brightness, and LED blink settings while connected and verify the app updates confirmed state.
 4. Constraints:
    - CI must pass without real BLE hardware.
    - Hardware smoke tests may be documented or manually invoked, but must not block ordinary unit/integration test runs.
@@ -586,6 +619,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - Build the actual application as the first screen: dashboard and device actions, not a landing page.
    - Use compact, work-focused desktop layouts with clear state and recovery actions.
    - Use icons for common controls, colour swatches for colours, toggles for binary settings, and numeric inputs for Pomodoro/reconnect/timeouts.
+   - Show measurement units beside numeric device settings such as tap register values, LED percent, LED seconds, Pomodoro minutes, and reconnect seconds.
    - Do not include explanatory marketing text or in-app documentation about implementation details.
 
 7. Testing Standards:
@@ -603,7 +637,7 @@ FacetAssignment --> FacetConfigurationView : displays
 
 ## Safeguards
 1. Functional Constraints:
-   - The app must support pairing, unpairing, scanning, connecting, authorization, state display, facet assignment, pause/unpause, tap/pause configuration, task-session history, and automatic reconnect for a configured device.
+   - The app must support pairing, unpairing, scanning, connecting, authorization, state display, facet assignment, pause/unpause, lock/unlock, tap/pause configuration, LED configuration, device-name configuration, task-session history, and automatic reconnect for a configured device.
    - The app must support all 12 TimeFlip2 facets for assignment display and editing.
    - The app must render history initially as task sessions, not summary reporting.
    - Labels and icons must remain local-only metadata.
@@ -630,10 +664,12 @@ FacetAssignment --> FacetConfigurationView : displays
 
 5. Data Constraints:
    - Stored device IDs must be non-empty.
+   - Device names written to the device must be non-empty, printable ASCII, and at most 18 bytes.
    - Stored TimeFlip passwords must be empty only for unknown/unset profiles or exactly six characters when used for authorization.
    - Facet IDs must stay within the TimeFlip2 facet range.
    - Task labels must be non-empty.
-   - Pomodoro duration must be non-negative and should be bounded to a practical maximum in validation.
+   - Pomodoro duration must be present only for explicit Pomodoro assignments and should be bounded to a practical maximum in validation.
+   - LED brightness must be between 1 and 100 percent; LED blink interval must be between 5 and 60 seconds.
    - Task session end time must not precede start time.
    - Existing task sessions must not be rewritten when a facet is reassigned.
 
@@ -647,6 +683,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - Use `timeflip-go` for BLE/device protocol operations.
    - Do not duplicate TimeFlip protocol logic in this app.
    - Device writes must prefer command success plus readback confirmation before the UI marks configuration as confirmed.
+   - Device-name writes may use command success as confirmation when the library command does not provide immediate readback.
    - Manual OS pair/unpair actions returned by the library must be displayed as recoverable workflow states.
 
 8. Business Rule Constraints:
@@ -662,6 +699,7 @@ FacetAssignment --> FacetConfigurationView : displays
    - The first screen must be the working app dashboard.
    - Pairing/unpairing must show staged progress and recoverable errors.
    - The facet editor must clearly distinguish local-only labels/icons from device-backed values.
+   - The device status panel must allow editing device name and show pending/confirmed profile state through refreshed profile data.
    - The history screen must show task sessions with start, duration, paused time, task name, facet, and end time when complete.
    - The active session duration and paused duration must count up accurately while the app is open.
    - Password fields must not reveal stored values by default.
