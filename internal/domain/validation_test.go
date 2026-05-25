@@ -53,6 +53,21 @@ func TestValidateDeviceNameRequiresPrintableASCIIWithinDeviceLimit(t *testing.T)
 	}
 }
 
+func TestDefaultTapTuningPresetsUseDeviceID(t *testing.T) {
+	presets := DefaultTapTuningPresets("device-1")
+	if len(presets) != 3 {
+		t.Fatalf("expected three tap tuning presets, got %#v", presets)
+	}
+	for _, preset := range presets {
+		if preset.ID == "" || preset.Label == "" || preset.Settings.DeviceID != "device-1" {
+			t.Fatalf("unexpected preset: %#v", preset)
+		}
+	}
+	if presets[0].Settings.Threshold != 20 || presets[0].Settings.Window != 30 {
+		t.Fatalf("expected balanced preset to use defaults, got %#v", presets[0])
+	}
+}
+
 func TestStartTaskSessionSkipsPauseAssignment(t *testing.T) {
 	session, created, err := StartTaskSession("device-1", FacetAssignment{
 		DeviceID:          "device-1",

@@ -61,6 +61,39 @@ export function tapSettingsToForm(settings = {}, deviceID = '') {
   };
 }
 
+export function tapPresetToForm(preset = {}, deviceID = '') {
+  return tapSettingsToForm(preset.settings || {}, deviceID);
+}
+
+export function tapFormToSettings(form = {}, deviceID = '') {
+  return {
+    deviceID,
+    threshold: byteValue(form.threshold, defaultTapSettings.threshold),
+    limit: byteValue(form.limit, defaultTapSettings.limit),
+    latency: byteValue(form.latency, defaultTapSettings.latency),
+    window: byteValue(form.window, defaultTapSettings.window),
+  };
+}
+
+export function tapTuningStatus(state = null, selectedTapSettings = null) {
+  if (state?.status === 'restore needed') {
+    return 'restore needed';
+  }
+  if (state?.active && state?.status === 'temporary') {
+    return 'temporary';
+  }
+  if (state?.active) {
+    return state.status || 'ready';
+  }
+  if (selectedTapSettings?.confirmedOnDevice) {
+    return 'confirmed on device';
+  }
+  if (selectedTapSettings) {
+    return 'saved locally';
+  }
+  return 'defaults';
+}
+
 export function ledSettingsToForm(settings = {}, deviceID = '') {
   return {
     ...defaultLEDSettings,

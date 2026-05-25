@@ -58,6 +58,7 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 			display_name TEXT NOT NULL,
 			advertised_name TEXT NOT NULL,
 			protocol_version TEXT NOT NULL,
+			firmware_version TEXT NOT NULL DEFAULT '',
 			stored_password TEXT NOT NULL,
 			pairing_state TEXT NOT NULL,
 			last_seen_at TEXT NOT NULL,
@@ -157,6 +158,9 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 	if err := s.ensureColumn(ctx, "facet_assignments", "is_pomodoro_assignment", "is_pomodoro_assignment INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn(ctx, "device_profiles", "firmware_version", "firmware_version TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE facet_assignments SET is_pomodoro_assignment = 1 WHERE is_pause_assignment = 0 AND pomodoro_limit_seconds > 0`); err != nil {
 		return wrapStoreErr("Could not migrate local database.", err)
 	}
@@ -198,28 +202,29 @@ func (s *SQLiteStore) SaveDeviceProfile(ctx context.Context, profile domain.Devi
 		profile.LastSeenAt = now
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO device_profiles
-		(id, display_name, advertised_name, protocol_version, stored_password, pairing_state, last_seen_at, last_connected_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		(id, display_name, advertised_name, protocol_version, firmware_version, stored_password, pairing_state, last_seen_at, last_connected_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			display_name=excluded.display_name,
 			advertised_name=excluded.advertised_name,
 			protocol_version=excluded.protocol_version,
+			firmware_version=excluded.firmware_version,
 			stored_password=excluded.stored_password,
 			pairing_state=excluded.pairing_state,
 			last_seen_at=excluded.last_seen_at,
 			last_connected_at=excluded.last_connected_at`,
-		profile.ID, profile.DisplayName, profile.AdvertisedName, profile.ProtocolVersion, profile.StoredPassword, profile.PairingState,
+		profile.ID, profile.DisplayName, profile.AdvertisedName, profile.ProtocolVersion, profile.FirmwareVersion, profile.StoredPassword, profile.PairingState,
 		formatTime(profile.LastSeenAt), formatTime(profile.LastConnectedAt))
 	return wrapStoreErr("Could not save device profile.", err)
 }
 
 func (s *SQLiteStore) GetDeviceProfile(ctx context.Context, id string) (domain.DeviceProfile, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, display_name, advertised_name, protocol_version, stored_password, pairing_state, last_seen_at, last_connected_at FROM device_profiles WHERE id = ?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT id, display_name, advertised_name, protocol_version, firmware_version, stored_password, pairing_state, last_seen_at, last_connected_at FROM device_profiles WHERE id = ?`, id)
 	return scanDeviceProfile(row)
 }
 
 func (s *SQLiteStore) ListDeviceProfiles(ctx context.Context) ([]domain.DeviceProfile, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, display_name, advertised_name, protocol_version, stored_password, pairing_state, last_seen_at, last_connected_at FROM device_profiles ORDER BY last_seen_at DESC, display_name ASC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, display_name, advertised_name, protocol_version, firmware_version, stored_password, pairing_state, last_seen_at, last_connected_at FROM device_profiles ORDER BY last_seen_at DESC, display_name ASC`)
 	if err != nil {
 		return nil, wrapStoreErr("Could not list device profiles.", err)
 	}
@@ -611,7 +616,7 @@ type scanner interface {
 func scanDeviceProfile(row scanner) (domain.DeviceProfile, error) {
 	var p domain.DeviceProfile
 	var seen, connected string
-	err := row.Scan(&p.ID, &p.DisplayName, &p.AdvertisedName, &p.ProtocolVersion, &p.StoredPassword, &p.PairingState, &seen, &connected)
+	err := row.Scan(&p.ID, &p.DisplayName, &p.AdvertisedName, &p.ProtocolVersion, &p.FirmwareVersion, &p.StoredPassword, &p.PairingState, &seen, &connected)
 	if err != nil {
 		return domain.DeviceProfile{}, wrapScanNotFound("Could not load device profile.", err)
 	}

@@ -80,7 +80,11 @@ func (c *Controller) GetAppState() (services.AppState, error) {
 	if len(profiles) > 0 {
 		current, _ = c.history.GetCurrentSession(ctx, profiles[0].ID)
 	}
-	return services.AppState{Config: cfg, Devices: devices, States: states, TapSettings: tapSettings, LEDSettings: ledSettings, Tasks: tasks, Sessions: sessions, FacetConfigs: facets, CurrentSession: current}, nil
+	var tapTuningStates []domain.TapTuningState
+	if c.devices != nil {
+		tapTuningStates = c.devices.TapTuningStates()
+	}
+	return services.AppState{Config: cfg, Devices: devices, States: states, TapSettings: tapSettings, TapTuningStates: tapTuningStates, LEDSettings: ledSettings, Tasks: tasks, Sessions: sessions, FacetConfigs: facets, CurrentSession: current}, nil
 }
 
 func (c *Controller) ScanDevices() ([]domain.DiscoveredDevice, error) {
@@ -156,6 +160,26 @@ func (c *Controller) SaveTapPauseSettings(req TapPauseSettingsRequest) error {
 
 func (c *Controller) SaveTapSettings(settings domain.DeviceTapSettings) (domain.DeviceTapSettings, error) {
 	return c.devices.ConfigureTapSettings(c.context(), settings)
+}
+
+func (c *Controller) BeginTapTuning(deviceID string) (domain.TapTuningState, error) {
+	return c.devices.BeginTapTuning(c.context(), deviceID)
+}
+
+func (c *Controller) PreviewTapTuningSettings(settings domain.DeviceTapSettings) (domain.TapTuningState, error) {
+	return c.devices.PreviewTapTuningSettings(c.context(), settings)
+}
+
+func (c *Controller) ConfirmTapTuningSettings(settings domain.DeviceTapSettings) (domain.DeviceTapSettings, error) {
+	return c.devices.ConfirmTapTuningSettings(c.context(), settings)
+}
+
+func (c *Controller) CancelTapTuning(deviceID string) (domain.TapTuningState, error) {
+	return c.devices.CancelTapTuning(c.context(), deviceID)
+}
+
+func (c *Controller) ListTapTuningPresets(deviceID string) []domain.TapTuningPreset {
+	return c.devices.ListTapTuningPresets(deviceID)
 }
 
 func (c *Controller) SaveLEDSettings(settings domain.DeviceLEDSettings) (domain.DeviceLEDSettings, error) {

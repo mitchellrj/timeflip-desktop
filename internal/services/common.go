@@ -43,13 +43,14 @@ func (b *MemoryEventBus) Publish(_ context.Context, name string, payload any) {
 }
 
 type AppState struct {
-	Config         domain.AppConfig                `json:"config"`
-	Devices        []domain.DeviceProfileView      `json:"devices"`
-	States         []domain.DeviceState            `json:"states"`
-	TapSettings    []domain.DeviceTapSettings      `json:"tapSettings"`
-	LEDSettings    []domain.DeviceLEDSettings      `json:"ledSettings"`
-	Tasks          []domain.Task                   `json:"tasks"`
-	Sessions       []domain.TaskSession            `json:"sessions"`
-	FacetConfigs   []domain.FacetConfigurationView `json:"facetConfigs"`
-	CurrentSession *domain.TaskSession             `json:"currentSession,omitempty"`
+	Config          domain.AppConfig                `json:"config"`
+	Devices         []domain.DeviceProfileView      `json:"devices"`
+	States          []domain.DeviceState            `json:"states"`
+	TapSettings     []domain.DeviceTapSettings      `json:"tapSettings"`
+	TapTuningStates []domain.TapTuningState         `json:"tapTuningStates"`
+	LEDSettings     []domain.DeviceLEDSettings      `json:"ledSettings"`
+	Tasks           []domain.Task                   `json:"tasks"`
+	Sessions        []domain.TaskSession            `json:"sessions"`
+	FacetConfigs    []domain.FacetConfigurationView `json:"facetConfigs"`
+	CurrentSession  *domain.TaskSession             `json:"currentSession,omitempty"`
 }

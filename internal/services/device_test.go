@@ -97,6 +97,194 @@ func TestConfigureTapSettingsPersistsAndWritesDevice(t *testing.T) {
 	}
 }
 
+func TestBeginTapTuningUsesStoredSettingsOrDefaults(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	stored := domain.DeviceTapSettings{DeviceID: "d1", Threshold: 21, Limit: 9, Latency: 4, Window: 31, ConfirmedOnDevice: true}
+	if err := st.SaveDeviceTapSettings(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	svc := NewDeviceService(&noStreamTapClient{}, st, nil, tracking, nil, bus, tracking.clock)
+
+	state, err := svc.BeginTapTuning(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Active || state.DraftSettings.Threshold != 21 || state.OriginalSettings.Window != 31 {
+		t.Fatalf("expected stored settings in tuning state, got %#v", state)
+	}
+	if !hasPublishedEvent(bus.Events, "device.tap.tuning.state") {
+		t.Fatalf("expected tuning state event, got %#v", bus.Events)
+	}
+
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d2", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err = svc.BeginTapTuning(ctx, "d2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.DraftSettings.Threshold != 20 || state.DraftSettings.Limit != 10 || state.DraftSettings.Window != 30 {
+		t.Fatalf("expected default settings for unsaved device, got %#v", state)
+	}
+}
+
+func TestPreviewTapTuningWritesDeviceWithoutPersisting(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	original := domain.DeviceTapSettings{DeviceID: "d1", Threshold: 20, Limit: 10, Latency: 5, Window: 30, ConfirmedOnDevice: true}
+	if err := st.SaveDeviceTapSettings(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	client := &noStreamTapClient{}
+	svc := NewDeviceService(client, st, nil, tracking, nil, bus, tracking.clock)
+	if _, err := svc.BeginTapTuning(ctx, "d1"); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := svc.PreviewTapTuningSettings(ctx, domain.DeviceTapSettings{DeviceID: "d1", Threshold: 24, Limit: 12, Latency: 6, Window: 36})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != "temporary" || !state.AppliedSettings.ConfirmedOnDevice {
+		t.Fatalf("expected temporary applied state, got %#v", state)
+	}
+	if len(client.tapSettings) != 1 || client.tapSettings[0].Threshold != 24 || client.tapSettings[0].Window != 36 {
+		t.Fatalf("expected one temporary device write, got %#v", client.tapSettings)
+	}
+	loaded, err := st.GetDeviceTapSettings(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Threshold != original.Threshold || loaded.Window != original.Window {
+		t.Fatalf("preview persisted settings unexpectedly: %#v", loaded)
+	}
+}
+
+func TestConfirmTapTuningPersistsAndEndsSession(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	client := &noStreamTapClient{}
+	svc := NewDeviceService(client, st, nil, tracking, nil, bus, tracking.clock)
+	if _, err := svc.BeginTapTuning(ctx, "d1"); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := svc.ConfirmTapTuningSettings(ctx, domain.DeviceTapSettings{DeviceID: "d1", Threshold: 23, Limit: 11, Latency: 6, Window: 35})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !saved.ConfirmedOnDevice || saved.Threshold != 23 {
+		t.Fatalf("expected confirmed saved settings, got %#v", saved)
+	}
+	if states := svc.TapTuningStates(); len(states) != 0 {
+		t.Fatalf("expected session to end, got %#v", states)
+	}
+	loaded, err := st.GetDeviceTapSettings(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.ConfirmedOnDevice || loaded.Window != 35 {
+		t.Fatalf("unexpected stored settings: %#v", loaded)
+	}
+}
+
+func TestCancelTapTuningRestoresOriginalWithoutChangingStore(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	original := domain.DeviceTapSettings{DeviceID: "d1", Threshold: 20, Limit: 10, Latency: 5, Window: 30, ConfirmedOnDevice: true}
+	if err := st.SaveDeviceTapSettings(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	client := &noStreamTapClient{}
+	svc := NewDeviceService(client, st, nil, tracking, nil, bus, tracking.clock)
+	if _, err := svc.BeginTapTuning(ctx, "d1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PreviewTapTuningSettings(ctx, domain.DeviceTapSettings{DeviceID: "d1", Threshold: 24, Limit: 12, Latency: 6, Window: 36}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := svc.CancelTapTuning(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Active || state.Status != "cancelled" {
+		t.Fatalf("expected inactive cancelled state, got %#v", state)
+	}
+	if len(client.tapSettings) != 2 || client.tapSettings[1].Threshold != original.Threshold || client.tapSettings[1].Window != original.Window {
+		t.Fatalf("expected preview then restore writes, got %#v", client.tapSettings)
+	}
+	loaded, err := st.GetDeviceTapSettings(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Threshold != original.Threshold || loaded.Window != original.Window {
+		t.Fatalf("cancel changed stored settings: %#v", loaded)
+	}
+}
+
+func TestDoubleTapEventPublishesTuningObservation(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	svc := NewDeviceService(&noStreamTapClient{}, st, nil, tracking, nil, bus, tracking.clock)
+	if _, err := svc.BeginTapTuning(ctx, "d1"); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.publishTapTuningObservation(ctx, domain.DeviceEventRecord{
+		DeviceID:   "d1",
+		Kind:       "double_tap",
+		Facet:      4,
+		OccurredAt: time.Date(2026, 5, 25, 10, 1, 0, 0, time.UTC),
+		Source:     "test",
+	})
+
+	states := svc.TapTuningStates()
+	if len(states) != 1 || states[0].DetectedCount != 1 || states[0].LastObservation == nil || states[0].LastObservation.Facet != 4 {
+		t.Fatalf("expected detected tap in tuning state, got %#v", states)
+	}
+	if !hasPublishedEvent(bus.Events, "device.tap.tuning.detected") {
+		t.Fatalf("expected tuning detected event, got %#v", bus.Events)
+	}
+}
+
+func TestPreviewTapTuningRequiresActiveSession(t *testing.T) {
+	ctx := context.Background()
+	st := &trackingMemoryStore{}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	svc := NewDeviceService(&pauseClient{}, st, nil, tracking, nil, bus, tracking.clock)
+
+	if _, err := svc.PreviewTapTuningSettings(ctx, domain.DeviceTapSettings{DeviceID: "d1", Threshold: 24, Limit: 12, Latency: 6, Window: 36}); err == nil {
+		t.Fatal("expected active session validation error")
+	}
+}
+
 func TestConfigureLEDSettingsPersistsAndWritesDevice(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -726,6 +914,20 @@ func TestPairDeviceResetsClosedSessionState(t *testing.T) {
 	}
 }
 
+func newDeviceTestStore(t *testing.T, ctx context.Context) (*store.SQLiteStore, func()) {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := store.NewSQLiteStore(db)
+	if err := st.Migrate(ctx); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	return st, func() {}
+}
+
 func hasPublishedEvent(events []PublishedEvent, name string) bool {
 	for _, event := range events {
 		if event.Name == name {
@@ -900,6 +1102,14 @@ func (c *blockingCloseClient) Close(ctx context.Context, _ device.Handle) error 
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+type noStreamTapClient struct {
+	pauseClient
+}
+
+func (c *noStreamTapClient) Events(context.Context, device.Handle) (<-chan domain.DeviceEventRecord, <-chan error, error) {
+	return nil, nil, errors.New("stream unavailable")
 }
 
 type pauseHandle string

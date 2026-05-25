@@ -144,6 +144,7 @@ func (c *TimeflipDeviceClient) ReadDeviceSnapshot(ctx context.Context, handle Ha
 			DisplayName:     firstNonEmpty(info.Name, h.deviceID),
 			AdvertisedName:  info.Name,
 			ProtocolVersion: string(info.ProtocolVersion),
+			FirmwareVersion: info.FirmwareRevision,
 			LastSeenAt:      time.Now().UTC(),
 		},
 		State: domain.DeviceState{

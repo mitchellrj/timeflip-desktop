@@ -19,6 +19,36 @@ import * as $models from "./models.js";
 
 /**
  * @param {string} deviceID
+ * @returns {$CancellablePromise<domain$0.TapTuningState>}
+ */
+export function BeginTapTuning(deviceID) {
+    return $Call.ByID(3067096939, deviceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * @param {string} deviceID
+ * @returns {$CancellablePromise<domain$0.TapTuningState>}
+ */
+export function CancelTapTuning(deviceID) {
+    return $Call.ByID(2692158010, deviceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * @param {domain$0.DeviceTapSettings} settings
+ * @returns {$CancellablePromise<domain$0.DeviceTapSettings>}
+ */
+export function ConfirmTapTuningSettings(settings) {
+    return $Call.ByID(483725109, settings).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {string} deviceID
  * @returns {$CancellablePromise<void>}
  */
 export function ConnectDevice(deviceID) {
@@ -38,7 +68,17 @@ export function DisconnectDevice(deviceID) {
  */
 export function GetAppState() {
     return $Call.ByID(4058975708).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType2($result);
+    }));
+}
+
+/**
+ * @param {string} deviceID
+ * @returns {$CancellablePromise<domain$0.TapTuningPreset[]>}
+ */
+export function ListTapTuningPresets(deviceID) {
+    return $Call.ByID(2967304252, deviceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
     }));
 }
 
@@ -48,7 +88,7 @@ export function GetAppState() {
  */
 export function ListTaskSessions(filter) {
     return $Call.ByID(3256966792, filter).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType6($result);
     }));
 }
 
@@ -58,7 +98,17 @@ export function ListTaskSessions(filter) {
  */
 export function PairDevice(req) {
     return $Call.ByID(3175843602, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType7($result);
+    }));
+}
+
+/**
+ * @param {domain$0.DeviceTapSettings} settings
+ * @returns {$CancellablePromise<domain$0.TapTuningState>}
+ */
+export function PreviewTapTuningSettings(settings) {
+    return $Call.ByID(733206969, settings).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
     }));
 }
 
@@ -68,7 +118,7 @@ export function PairDevice(req) {
  */
 export function SaveDeviceName(req) {
     return $Call.ByID(1719811836, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType8($result);
     }));
 }
 
@@ -78,7 +128,7 @@ export function SaveDeviceName(req) {
  */
 export function SaveFacetAssignment(req) {
     return $Call.ByID(138397421, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType9($result);
     }));
 }
 
@@ -88,7 +138,7 @@ export function SaveFacetAssignment(req) {
  */
 export function SaveLEDSettings(settings) {
     return $Call.ByID(615670515, settings).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType10($result);
     }));
 }
 
@@ -114,7 +164,7 @@ export function SaveTapPauseSettings(req) {
  */
 export function SaveTapSettings(settings) {
     return $Call.ByID(1509613963, settings).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType1($result);
     }));
 }
 
@@ -124,7 +174,7 @@ export function SaveTapSettings(settings) {
  */
 export function SaveTask(req) {
     return $Call.ByID(3180049120, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType11($result);
     }));
 }
 
@@ -133,7 +183,7 @@ export function SaveTask(req) {
  */
 export function ScanDevices() {
     return $Call.ByID(4085665344).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType13($result);
     }));
 }
 
@@ -175,20 +225,23 @@ export function Startup() {
  */
 export function UnpairDevice(req) {
     return $Call.ByID(2780315949, req).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType14($result);
     }));
 }
 
 // Private type creation functions
-const $$createType0 = services$0.AppState.createFrom;
-const $$createType1 = domain$0.TaskSession.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = domain$0.PairingWorkflow.createFrom;
-const $$createType4 = domain$0.DeviceProfileView.createFrom;
-const $$createType5 = domain$0.FacetConfigurationView.createFrom;
-const $$createType6 = domain$0.DeviceLEDSettings.createFrom;
-const $$createType7 = domain$0.DeviceTapSettings.createFrom;
-const $$createType8 = domain$0.Task.createFrom;
-const $$createType9 = domain$0.DiscoveredDevice.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = domain$0.UnpairingWorkflow.createFrom;
+const $$createType0 = domain$0.TapTuningState.createFrom;
+const $$createType1 = domain$0.DeviceTapSettings.createFrom;
+const $$createType2 = services$0.AppState.createFrom;
+const $$createType3 = domain$0.TapTuningPreset.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = domain$0.TaskSession.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = domain$0.PairingWorkflow.createFrom;
+const $$createType8 = domain$0.DeviceProfileView.createFrom;
+const $$createType9 = domain$0.FacetConfigurationView.createFrom;
+const $$createType10 = domain$0.DeviceLEDSettings.createFrom;
+const $$createType11 = domain$0.Task.createFrom;
+const $$createType12 = domain$0.DiscoveredDevice.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = domain$0.UnpairingWorkflow.createFrom;

@@ -254,20 +254,34 @@ func (c fixedClock) Now() time.Time { return c.t }
 
 type trackingMemoryStore struct {
 	assignments map[uint8]domain.FacetAssignment
+	profiles    map[string]domain.DeviceProfile
+	tapSettings map[string]domain.DeviceTapSettings
 	state       domain.DeviceState
 	session     domain.TaskSession
 }
 
 func (s *trackingMemoryStore) Migrate(context.Context) error { return nil }
 func (s *trackingMemoryStore) Close() error                  { return nil }
-func (s *trackingMemoryStore) SaveDeviceProfile(context.Context, domain.DeviceProfile) error {
+func (s *trackingMemoryStore) SaveDeviceProfile(_ context.Context, profile domain.DeviceProfile) error {
+	if s.profiles == nil {
+		s.profiles = map[string]domain.DeviceProfile{}
+	}
+	s.profiles[profile.ID] = profile
 	return nil
 }
-func (s *trackingMemoryStore) GetDeviceProfile(context.Context, string) (domain.DeviceProfile, error) {
-	return domain.DeviceProfile{}, domain.ErrNotFound
+func (s *trackingMemoryStore) GetDeviceProfile(_ context.Context, deviceID string) (domain.DeviceProfile, error) {
+	profile, ok := s.profiles[deviceID]
+	if !ok {
+		return domain.DeviceProfile{}, domain.ErrNotFound
+	}
+	return profile, nil
 }
 func (s *trackingMemoryStore) ListDeviceProfiles(context.Context) ([]domain.DeviceProfile, error) {
-	return nil, nil
+	profiles := make([]domain.DeviceProfile, 0, len(s.profiles))
+	for _, profile := range s.profiles {
+		profiles = append(profiles, profile)
+	}
+	return profiles, nil
 }
 func (s *trackingMemoryStore) SaveTask(context.Context, domain.Task) error { return nil }
 func (s *trackingMemoryStore) ListTasks(context.Context, bool) ([]domain.Task, error) {
@@ -301,14 +315,26 @@ func (s *trackingMemoryStore) GetDeviceState(context.Context, string) (domain.De
 	}
 	return s.state, nil
 }
-func (s *trackingMemoryStore) SaveDeviceTapSettings(context.Context, domain.DeviceTapSettings) error {
+func (s *trackingMemoryStore) SaveDeviceTapSettings(_ context.Context, settings domain.DeviceTapSettings) error {
+	if s.tapSettings == nil {
+		s.tapSettings = map[string]domain.DeviceTapSettings{}
+	}
+	s.tapSettings[settings.DeviceID] = settings
 	return nil
 }
-func (s *trackingMemoryStore) GetDeviceTapSettings(context.Context, string) (domain.DeviceTapSettings, error) {
-	return domain.DeviceTapSettings{}, domain.ErrNotFound
+func (s *trackingMemoryStore) GetDeviceTapSettings(_ context.Context, deviceID string) (domain.DeviceTapSettings, error) {
+	settings, ok := s.tapSettings[deviceID]
+	if !ok {
+		return domain.DeviceTapSettings{}, domain.ErrNotFound
+	}
+	return settings, nil
 }
 func (s *trackingMemoryStore) ListDeviceTapSettings(context.Context) ([]domain.DeviceTapSettings, error) {
-	return nil, nil
+	settings := make([]domain.DeviceTapSettings, 0, len(s.tapSettings))
+	for _, item := range s.tapSettings {
+		settings = append(settings, item)
+	}
+	return settings, nil
 }
 func (s *trackingMemoryStore) SaveDeviceLEDSettings(context.Context, domain.DeviceLEDSettings) error {
 	return nil

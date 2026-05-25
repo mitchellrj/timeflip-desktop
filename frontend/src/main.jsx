@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Bluetooth,
+  Check,
   Clock3,
   History,
   KeyRound,
@@ -11,6 +12,7 @@ import {
   Plus,
   Plug,
   RefreshCw,
+  RotateCcw,
   Save,
   Settings,
   ShieldCheck,
@@ -19,13 +21,19 @@ import {
   Trash2,
   Unlock,
   Unplug,
+  X,
 } from 'lucide-react';
 import { Events } from '@wailsio/runtime';
 import {
+  BeginTapTuning,
+  CancelTapTuning,
+  ConfirmTapTuningSettings,
   ConnectDevice,
   DisconnectDevice,
   GetAppState,
+  ListTapTuningPresets,
   PairDevice,
+  PreviewTapTuningSettings,
   SaveDeviceName,
   SaveFacetAssignment,
   SaveLEDSettings,
@@ -37,10 +45,10 @@ import {
   SetPaused,
   UnpairDevice,
 } from '../bindings/github.com/mitchellrj/timeflip-desktop/internal/app/controller.js';
-import { byteValue, configToSettings, defaultLEDSettings, defaultSettings, defaultTapSettings, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapSettingsToForm } from './timeflip-format.js';
+import { byteValue, configToSettings, defaultLEDSettings, defaultSettings, defaultTapSettings, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus } from './timeflip-format.js';
 import './styles.css';
 
-const emptyState = { config: {}, devices: [], states: [], tapSettings: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
+const emptyState = { config: {}, devices: [], states: [], tapSettings: [], tapTuningStates: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
 const defaultTask = { mode: 'task', id: '', label: '', icon: 'tag', color: '#69d2a5', pomodoroLimitMinutes: 25 };
 const defaultPair = { deviceID: '', password: '000000', newPassword: '', allowOSPairing: true };
 const defaultPassword = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -60,6 +68,7 @@ function App() {
   const [facetDirty, setFacetDirty] = useState(false);
   const [settingsForm, setSettingsForm] = useState(defaultSettings);
   const [tapForm, setTapForm] = useState(defaultTapSettings);
+  const [tapPresets, setTapPresets] = useState([]);
   const [ledForm, setLEDForm] = useState(defaultLEDSettings);
   const [deviceNameForm, setDeviceNameForm] = useState('');
   const [workflow, setWorkflow] = useState(null);
@@ -115,9 +124,23 @@ function App() {
         setState((current) => mergeDeviceState(current, deviceState));
       }
     };
+    const refreshFromTapTuningState = (event) => {
+      const tapTuningState = event?.data?.state || event?.data;
+      if (tapTuningState?.deviceID) {
+        setState((current) => mergeTapTuningState(current, tapTuningState));
+      }
+    };
+    const refreshFromTapTuningObservation = (event) => {
+      const observation = event?.data?.observation || event?.data;
+      if (observation?.deviceID) {
+        setState((current) => mergeTapTuningObservation(current, observation));
+      }
+    };
     refreshFromEvent();
     const offDeviceState = Events.On('device.state', refreshFromDeviceState);
     const offConnectionState = Events.On('device.connection', refreshFromDeviceState);
+    const offTapTuningState = Events.On('device.tap.tuning.state', refreshFromTapTuningState);
+    const offTapTuningDetected = Events.On('device.tap.tuning.detected', refreshFromTapTuningObservation);
     const offHandlers = [
       'shell.refresh',
       'devices.scanned',
@@ -139,6 +162,8 @@ function App() {
     return () => {
       offDeviceState();
       offConnectionState();
+      offTapTuningState();
+      offTapTuningDetected();
       offHandlers.forEach((off) => off());
       offError();
     };
@@ -172,7 +197,10 @@ function App() {
   const taskChoices = useMemo(() => dedupeTasks(state.tasks, taskForm.id), [state.tasks, taskForm.id]);
   const selectedFacetConfig = state.facetConfigs?.find((item) => item.deviceID === selectedDevice && item.facet === selectedFacet);
   const selectedTapSettings = state.tapSettings?.find((item) => item.deviceID === selectedDevice);
+  const selectedTapTuning = state.tapTuningStates?.find((item) => item.deviceID === selectedDevice);
+  const selectedTapStatus = tapTuningStatus(selectedTapTuning, selectedTapSettings);
   const selectedLEDSettings = state.ledSettings?.find((item) => item.deviceID === selectedDevice);
+  const selectedDeviceConnected = activeState?.deviceID === selectedDevice && activeState?.connectionState === 'connected';
   const selectedFacetSavedLabel = selectedFacetLabel(selectedFacetConfig, selectedFacet);
   const selectedFacetSavedKind = facetKindLabel(selectedFacetConfig);
 
@@ -185,6 +213,16 @@ function App() {
   useEffect(() => {
     setDeviceNameForm(selectedDeviceView?.displayName || '');
   }, [selectedDevice, selectedDeviceView?.displayName]);
+
+  useEffect(() => {
+    if (!selectedDevice) {
+      setTapPresets([]);
+      return;
+    }
+    Promise.resolve(ListTapTuningPresets(selectedDevice))
+      .then((presets) => setTapPresets(presets || []))
+      .catch((err) => setError(messageFromError(err)));
+  }, [selectedDevice]);
 
   useEffect(() => {
     setTaskForm(taskFormFromFacet(selectedFacetConfig, selectedFacet));
@@ -202,9 +240,15 @@ function App() {
   ]);
 
   useEffect(() => {
-    setTapForm(tapSettingsToForm(selectedTapSettings, selectedDevice));
+    const source = selectedTapTuning?.active ? selectedTapTuning.draftSettings : selectedTapSettings;
+    setTapForm(tapSettingsToForm(source, selectedDevice));
   }, [
     selectedDevice,
+    selectedTapTuning?.active,
+    selectedTapTuning?.draftSettings?.threshold,
+    selectedTapTuning?.draftSettings?.limit,
+    selectedTapTuning?.draftSettings?.latency,
+    selectedTapTuning?.draftSettings?.window,
     selectedTapSettings?.threshold,
     selectedTapSettings?.limit,
     selectedTapSettings?.latency,
@@ -362,17 +406,60 @@ function App() {
       setError('Select a device before saving tap settings.');
       return;
     }
-    const settings = {
-      deviceID: selectedDevice,
-      threshold: byteValue(tapForm.threshold, defaultTapSettings.threshold),
-      limit: byteValue(tapForm.limit, defaultTapSettings.limit),
-      latency: byteValue(tapForm.latency, defaultTapSettings.latency),
-      window: byteValue(tapForm.window, defaultTapSettings.window),
-    };
-    const saved = await runAction('tapSettings', () => SaveTapSettings(settings), 'Tap settings saved');
+    const settings = tapFormToSettings(tapForm, selectedDevice);
+    const action = selectedTapTuning?.active
+      ? () => ConfirmTapTuningSettings(settings)
+      : () => SaveTapSettings(settings);
+    const saved = await runAction('tapSettings', action, 'Tap settings saved');
     if (saved) {
       setTapForm(tapSettingsToForm(saved, selectedDevice));
     }
+  }
+
+  async function beginTapTuning() {
+    if (!selectedDevice) {
+      setError('Select a device before tuning tap settings.');
+      return;
+    }
+    const result = await runAction('tapTuningStart', () => BeginTapTuning(selectedDevice), 'Tap tuning started');
+    if (result) {
+      setState((current) => mergeTapTuningState(current, result));
+      setTapForm(tapSettingsToForm(result.draftSettings, selectedDevice));
+    }
+  }
+
+  async function previewTapTuning() {
+    if (!selectedDevice) {
+      setError('Select a device before applying tap settings.');
+      return;
+    }
+    const settings = tapFormToSettings(tapForm, selectedDevice);
+    const result = await runAction('tapTuningPreview', () => PreviewTapTuningSettings(settings), 'Temporary tap settings applied');
+    if (result) {
+      setState((current) => mergeTapTuningState(current, result));
+      setTapForm(tapSettingsToForm(result.draftSettings, selectedDevice));
+    }
+  }
+
+  async function cancelTapTuning() {
+    if (!selectedDevice) {
+      setError('Select a device before cancelling tap tuning.');
+      return;
+    }
+    const result = await runAction('tapTuningCancel', () => CancelTapTuning(selectedDevice), 'Tap tuning cancelled');
+    if (result) {
+      setState((current) => mergeTapTuningState(current, result));
+      setTapForm(tapSettingsToForm(selectedTapSettings, selectedDevice));
+    }
+  }
+
+  function applyTapPreset(preset) {
+    setTapForm(tapPresetToForm(preset, selectedDevice));
+  }
+
+  function resetTapForm() {
+    const source = selectedTapTuning?.active ? selectedTapTuning.originalSettings : selectedTapSettings;
+    setTapForm(tapSettingsToForm(source, selectedDevice));
   }
 
   function updateTapForm(field, value) {
@@ -558,6 +645,7 @@ function App() {
             <dl className="facts">
               <dt>Device</dt><dd>{selectedDeviceView?.displayName || selectedDevice || 'none'}</dd>
               <dt>Connection</dt><dd>{activeState?.connectionState || 'none'}</dd>
+              <dt>Firmware</dt><dd>{selectedDeviceView?.firmwareVersion || 'unknown'}</dd>
               <dt>Battery</dt><dd>{activeState?.batteryPercent ? `${activeState.batteryPercent}%` : 'unknown'}</dd>
               <dt>Locked</dt><dd>{activeState?.locked ? 'yes' : 'no'}</dd>
               <dt>Paused</dt><dd>{activeState?.paused ? 'yes' : 'no'}</dd>
@@ -569,38 +657,36 @@ function App() {
               </label>
               <button disabled={!selectedDevice || busy === 'deviceName'}><Save size={16} /> Save Device Name</button>
             </form>
-            <label className="check inlineAction">
-              <input
-                type="checkbox"
-                checked={Boolean(activeState?.locked)}
-                disabled={!selectedDevice || busy === 'lockStatus'}
-                onChange={(event) => runAction('lockStatus', () => SetLocked(selectedDevice, event.target.checked), event.target.checked ? 'Orientation locked' : 'Orientation unlocked')}
-              />
-              Lock orientation
-            </label>
-            <label className="check inlineAction">
-              <input
-                type="checkbox"
-	                checked={Boolean(activeState?.paused)}
-	                disabled={!selectedDevice || busy === 'tapPause'}
-	                onChange={(event) => runAction('tapPause', () => SetPaused(selectedDevice, event.target.checked), event.target.checked ? 'Tracking paused' : 'Tracking resumed')}
-	              />
-	              Pause tracking
-	            </label>
 	          </Panel>
 
 	          <Panel title="Tap Settings" icon={<SlidersHorizontal size={18} />}>
 	            <form className="form" onSubmit={saveTapSettings}>
 	              <dl className="facts compact">
-	                <dt>Status</dt><dd>{selectedTapSettings?.confirmedOnDevice ? 'confirmed on device' : selectedTapSettings ? 'saved locally' : 'defaults'}</dd>
+	                <dt>Status</dt><dd>{selectedTapStatus}</dd>
+	                <dt>Preview</dt><dd>{selectedTapTuning?.active ? 'active' : 'off'}</dd>
+	                <dt>Detections</dt><dd>{selectedTapTuning?.detectedCount || 0}</dd>
+	                <dt>Last tap</dt><dd>{selectedTapTuning?.lastObservation ? `Facet ${selectedTapTuning.lastObservation.facet} · ${formatTime(selectedTapTuning.lastObservation.occurredAt)}` : 'none'}</dd>
 	              </dl>
-	              <div className="formGrid">
-	                <ByteField label="Threshold" unit="0-255 register value" value={tapForm.threshold} onChange={(value) => updateTapForm('threshold', value)} />
-	                <ByteField label="Limit" unit="0-255 register ticks" value={tapForm.limit} onChange={(value) => updateTapForm('limit', value)} />
-	                <ByteField label="Latency" unit="0-255 register ticks" value={tapForm.latency} onChange={(value) => updateTapForm('latency', value)} />
-	                <ByteField label="Window" unit="0-255 register ticks" value={tapForm.window} onChange={(value) => updateTapForm('window', value)} />
+	              <div className="presetGrid">
+	                {tapPresets.map((preset) => (
+	                  <button type="button" key={preset.id} disabled={!selectedDevice} onClick={() => applyTapPreset(preset)}>
+	                    <SlidersHorizontal size={15} /> {preset.label}
+	                  </button>
+	                ))}
 	              </div>
-	              <button className="primary" disabled={!selectedDevice || busy === 'tapSettings'}><Save size={16} /> Save Tap Settings</button>
+	              <div className="tapControlGrid">
+	                <TapByteField label="Threshold" unit="register value" value={tapForm.threshold} onChange={(value) => updateTapForm('threshold', value)} />
+	                <TapByteField label="Limit" unit="register ticks" value={tapForm.limit} onChange={(value) => updateTapForm('limit', value)} />
+	                <TapByteField label="Latency" unit="register ticks" value={tapForm.latency} onChange={(value) => updateTapForm('latency', value)} />
+	                <TapByteField label="Window" unit="register ticks" value={tapForm.window} onChange={(value) => updateTapForm('window', value)} />
+	              </div>
+	              <div className="toolbar">
+	                <button type="button" disabled={!selectedDevice || !selectedDeviceConnected || selectedTapTuning?.active || busy === 'tapTuningStart'} onClick={beginTapTuning}><Play size={16} /> Start</button>
+	                <button type="button" disabled={!selectedDevice || !selectedTapTuning?.active || !selectedDeviceConnected || busy === 'tapTuningPreview'} onClick={previewTapTuning}><Check size={16} /> Apply</button>
+	                <button type="button" disabled={!selectedDevice || busy === 'tapReset'} onClick={resetTapForm}><RotateCcw size={16} /> Reset</button>
+	                <button type="button" disabled={!selectedDevice || !selectedTapTuning?.active || busy === 'tapTuningCancel'} onClick={cancelTapTuning}><X size={16} /> Cancel</button>
+	                <button className="primary" disabled={!selectedDevice || busy === 'tapSettings'}><Save size={16} /> Save</button>
+	              </div>
 	            </form>
 	          </Panel>
 
@@ -817,6 +903,21 @@ function ByteField({ label, unit, value, onChange, min = 0, max = 255 }) {
   );
 }
 
+function TapByteField({ label, unit, value, onChange }) {
+  return (
+    <label className="tapControl">
+      <span className="fieldLabel">
+        <span>{label}</span>
+        <small>{unit}</small>
+      </span>
+      <div className="rangeRow">
+        <input type="range" min={0} max={255} value={value} aria-label={`${label}, ${unit}`} onChange={(event) => onChange(Number(event.target.value))} />
+        <input type="number" min={0} max={255} value={value} aria-label={`${label} byte value`} onChange={(event) => onChange(Number(event.target.value))} />
+      </div>
+    </label>
+  );
+}
+
 function WorkflowStatus({ workflow }) {
   return (
     <section className="band workflow">
@@ -942,6 +1043,35 @@ function mergeDeviceState(current, deviceState) {
   };
 }
 
+function mergeTapTuningState(current, tapTuningState) {
+  const tapTuningStates = current.tapTuningStates || [];
+  const nextStates = tapTuningState.active
+    ? upsertByDevice(tapTuningStates, tapTuningState)
+    : tapTuningStates.filter((state) => state.deviceID !== tapTuningState.deviceID);
+  return { ...current, tapTuningStates: nextStates };
+}
+
+function mergeTapTuningObservation(current, observation) {
+  const tapTuningStates = current.tapTuningStates || [];
+  const found = tapTuningStates.some((state) => state.deviceID === observation.deviceID);
+  const nextObservation = { lastObservation: observation };
+  return {
+    ...current,
+    tapTuningStates: found
+      ? tapTuningStates.map((state) => (state.deviceID === observation.deviceID
+        ? { ...state, ...nextObservation, detectedCount: Number(state.detectedCount || 0) + 1 }
+        : state))
+      : tapTuningStates,
+  };
+}
+
+function upsertByDevice(items = [], item) {
+  const found = items.some((existing) => existing.deviceID === item.deviceID);
+  return found
+    ? items.map((existing) => (existing.deviceID === item.deviceID ? { ...existing, ...item } : existing))
+    : [...items, item];
+}
+
 function mergeAppState(current, next) {
   return {
     ...next,
@@ -1025,6 +1155,17 @@ function formatDateTime(value) {
     return 'Not recorded';
   }
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function formatTime(value) {
+  if (!value) {
+    return 'not recorded';
+  }
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return 'not recorded';
+  }
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function dedupeTasks(tasks = [], selectedTaskID = '') {

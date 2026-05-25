@@ -173,6 +173,13 @@ export class DeviceProfileView {
              */
             this["protocolVersion"] = "";
         }
+        if (!("firmwareVersion" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["firmwareVersion"] = "";
+        }
         if (!("pairingState" in $$source)) {
             /**
              * @member
@@ -831,6 +838,219 @@ export class StageResult {
     }
 }
 
+export class TapTuningObservation {
+    /**
+     * Creates a new TapTuningObservation instance.
+     * @param {Partial<TapTuningObservation>} [$$source = {}] - The source object to create the TapTuningObservation.
+     */
+    constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
+        if (!("facet" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["facet"] = 0;
+        }
+        if (!("pause" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["pause"] = false;
+        }
+        if (!("occurredAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["occurredAt"] = null;
+        }
+        if (!("settingsSnapshot" in $$source)) {
+            /**
+             * @member
+             * @type {DeviceTapSettings}
+             */
+            this["settingsSnapshot"] = (new DeviceTapSettings());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TapTuningObservation instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TapTuningObservation}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("settingsSnapshot" in $$parsedSource) {
+            $$parsedSource["settingsSnapshot"] = $$createField4_0($$parsedSource["settingsSnapshot"]);
+        }
+        return new TapTuningObservation(/** @type {Partial<TapTuningObservation>} */($$parsedSource));
+    }
+}
+
+export class TapTuningPreset {
+    /**
+     * Creates a new TapTuningPreset instance.
+     * @param {Partial<TapTuningPreset>} [$$source = {}] - The source object to create the TapTuningPreset.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["label"] = "";
+        }
+        if (!("description" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["description"] = "";
+        }
+        if (!("settings" in $$source)) {
+            /**
+             * @member
+             * @type {DeviceTapSettings}
+             */
+            this["settings"] = (new DeviceTapSettings());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TapTuningPreset instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TapTuningPreset}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("settings" in $$parsedSource) {
+            $$parsedSource["settings"] = $$createField3_0($$parsedSource["settings"]);
+        }
+        return new TapTuningPreset(/** @type {Partial<TapTuningPreset>} */($$parsedSource));
+    }
+}
+
+export class TapTuningState {
+    /**
+     * Creates a new TapTuningState instance.
+     * @param {Partial<TapTuningState>} [$$source = {}] - The source object to create the TapTuningState.
+     */
+    constructor($$source = {}) {
+        if (!("deviceID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deviceID"] = "";
+        }
+        if (!("active" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["active"] = false;
+        }
+        if (!("connected" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["connected"] = false;
+        }
+        if (!("originalSettings" in $$source)) {
+            /**
+             * @member
+             * @type {DeviceTapSettings}
+             */
+            this["originalSettings"] = (new DeviceTapSettings());
+        }
+        if (!("draftSettings" in $$source)) {
+            /**
+             * @member
+             * @type {DeviceTapSettings}
+             */
+            this["draftSettings"] = (new DeviceTapSettings());
+        }
+        if (!("appliedSettings" in $$source)) {
+            /**
+             * @member
+             * @type {DeviceTapSettings}
+             */
+            this["appliedSettings"] = (new DeviceTapSettings());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {TapTuningObservation | null | undefined}
+             */
+            this["lastObservation"] = undefined;
+        }
+        if (!("detectedCount" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["detectedCount"] = 0;
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TapTuningState instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TapTuningState}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType6;
+        const $$createField4_0 = $$createType6;
+        const $$createField5_0 = $$createType6;
+        const $$createField6_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("originalSettings" in $$parsedSource) {
+            $$parsedSource["originalSettings"] = $$createField3_0($$parsedSource["originalSettings"]);
+        }
+        if ("draftSettings" in $$parsedSource) {
+            $$parsedSource["draftSettings"] = $$createField4_0($$parsedSource["draftSettings"]);
+        }
+        if ("appliedSettings" in $$parsedSource) {
+            $$parsedSource["appliedSettings"] = $$createField5_0($$parsedSource["appliedSettings"]);
+        }
+        if ("lastObservation" in $$parsedSource) {
+            $$parsedSource["lastObservation"] = $$createField6_0($$parsedSource["lastObservation"]);
+        }
+        return new TapTuningState(/** @type {Partial<TapTuningState>} */($$parsedSource));
+    }
+}
+
 export class Task {
     /**
      * Creates a new Task instance.
@@ -1154,3 +1374,6 @@ const $$createType2 = StageResult.createFrom;
 const $$createType3 = $Create.Array($$createType2);
 const $$createType4 = ManualAction.createFrom;
 const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = DeviceTapSettings.createFrom;
+const $$createType7 = TapTuningObservation.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);

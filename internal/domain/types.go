@@ -58,6 +58,7 @@ type DeviceProfile struct {
 	DisplayName     string    `json:"displayName"`
 	AdvertisedName  string    `json:"advertisedName"`
 	ProtocolVersion string    `json:"protocolVersion"`
+	FirmwareVersion string    `json:"firmwareVersion"`
 	StoredPassword  string    `json:"-"`
 	PairingState    string    `json:"pairingState"`
 	LastSeenAt      time.Time `json:"lastSeenAt"`
@@ -69,6 +70,7 @@ type DeviceProfileView struct {
 	DisplayName     string    `json:"displayName"`
 	AdvertisedName  string    `json:"advertisedName"`
 	ProtocolVersion string    `json:"protocolVersion"`
+	FirmwareVersion string    `json:"firmwareVersion"`
 	PairingState    string    `json:"pairingState"`
 	LastSeenAt      time.Time `json:"lastSeenAt"`
 	LastConnectedAt time.Time `json:"lastConnectedAt"`
@@ -81,6 +83,7 @@ func (p DeviceProfile) View() DeviceProfileView {
 		DisplayName:     p.DisplayName,
 		AdvertisedName:  p.AdvertisedName,
 		ProtocolVersion: p.ProtocolVersion,
+		FirmwareVersion: p.FirmwareVersion,
 		PairingState:    p.PairingState,
 		LastSeenAt:      p.LastSeenAt,
 		LastConnectedAt: p.LastConnectedAt,
@@ -168,6 +171,98 @@ func DefaultDeviceTapSettings(deviceID string) DeviceTapSettings {
 		Limit:     10,
 		Latency:   5,
 		Window:    30,
+	}
+}
+
+type TapTuningPreset struct {
+	ID          string            `json:"id"`
+	Label       string            `json:"label"`
+	Description string            `json:"description"`
+	Settings    DeviceTapSettings `json:"settings"`
+}
+
+type TapTuningSession struct {
+	DeviceID         string                `json:"deviceID"`
+	Active           bool                  `json:"active"`
+	OriginalSettings DeviceTapSettings     `json:"originalSettings"`
+	DraftSettings    DeviceTapSettings     `json:"draftSettings"`
+	AppliedSettings  DeviceTapSettings     `json:"appliedSettings"`
+	LastObservation  *TapTuningObservation `json:"lastObservation,omitempty"`
+	DetectedCount    int                   `json:"detectedCount"`
+	Status           string                `json:"status"`
+	StartedAt        time.Time             `json:"startedAt"`
+	LastAppliedAt    time.Time             `json:"lastAppliedAt"`
+	LastDetectedAt   time.Time             `json:"lastDetectedAt"`
+}
+
+type TapTuningState struct {
+	DeviceID         string                `json:"deviceID"`
+	Active           bool                  `json:"active"`
+	Connected        bool                  `json:"connected"`
+	OriginalSettings DeviceTapSettings     `json:"originalSettings"`
+	DraftSettings    DeviceTapSettings     `json:"draftSettings"`
+	AppliedSettings  DeviceTapSettings     `json:"appliedSettings"`
+	LastObservation  *TapTuningObservation `json:"lastObservation,omitempty"`
+	DetectedCount    int                   `json:"detectedCount"`
+	Status           string                `json:"status"`
+}
+
+type TapTuningObservation struct {
+	DeviceID         string            `json:"deviceID"`
+	Facet            uint8             `json:"facet"`
+	Pause            bool              `json:"pause"`
+	OccurredAt       time.Time         `json:"occurredAt"`
+	SettingsSnapshot DeviceTapSettings `json:"settingsSnapshot"`
+}
+
+type TapTuningPreviewRequest struct {
+	DeviceID  string `json:"deviceID"`
+	Threshold uint8  `json:"threshold"`
+	Limit     uint8  `json:"limit"`
+	Latency   uint8  `json:"latency"`
+	Window    uint8  `json:"window"`
+}
+
+type TapTuningConfirmRequest struct {
+	DeviceID  string `json:"deviceID"`
+	Threshold uint8  `json:"threshold"`
+	Limit     uint8  `json:"limit"`
+	Latency   uint8  `json:"latency"`
+	Window    uint8  `json:"window"`
+}
+
+func DefaultTapTuningPresets(deviceID string) []TapTuningPreset {
+	return []TapTuningPreset{
+		{
+			ID:          "balanced",
+			Label:       "Balanced",
+			Description: "Default TimeFlip2 tap feel.",
+			Settings:    DefaultDeviceTapSettings(deviceID),
+		},
+		{
+			ID:          "sensitive",
+			Label:       "Sensitive",
+			Description: "Easier detection for lighter or slower double taps.",
+			Settings: DeviceTapSettings{
+				DeviceID:  deviceID,
+				Threshold: 10,
+				Limit:     16,
+				Latency:   8,
+				Window:    80,
+			},
+		},
+		{
+			ID:          "deliberate",
+			Label:       "Deliberate",
+			Description: "Requires firmer, more intentional taps.",
+			Settings: DeviceTapSettings{
+				DeviceID:  deviceID,
+				Threshold: 30,
+				Limit:     8,
+				Latency:   4,
+				Window:    24,
+			},
+		},
 	}
 }
 

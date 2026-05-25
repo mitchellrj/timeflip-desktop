@@ -37,6 +37,18 @@ func TestSQLiteStoreMigrateTwiceAndPersistTask(t *testing.T) {
 		t.Fatalf("unexpected tasks: %#v", tasks)
 	}
 
+	profile := domain.DeviceProfile{ID: "d1", DisplayName: "TimeFlip", AdvertisedName: "TimeFlip", ProtocolVersion: "v4", FirmwareVersion: "FW_v3.59", StoredPassword: "000000"}
+	if err := s.SaveDeviceProfile(ctx, profile); err != nil {
+		t.Fatalf("save device profile: %v", err)
+	}
+	loadedProfile, err := s.GetDeviceProfile(ctx, "d1")
+	if err != nil {
+		t.Fatalf("get device profile: %v", err)
+	}
+	if loadedProfile.FirmwareVersion != "FW_v3.59" || loadedProfile.ProtocolVersion != "v4" {
+		t.Fatalf("unexpected device profile: %#v", loadedProfile)
+	}
+
 	assignment := domain.FacetAssignment{
 		ID:                   "assignment-1",
 		DeviceID:             "d1",

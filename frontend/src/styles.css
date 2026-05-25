@@ -296,6 +296,44 @@ dd {
   flex: 1 1 180px;
 }
 
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.presetGrid button {
+  min-width: 0;
+}
+
+.tapControlGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.tapControl {
+  border: 1px solid #e0e7eb;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
+.rangeRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 74px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rangeRow input[type="range"] {
+  width: 100%;
+  accent-color: #3c7b6a;
+}
+
+.rangeRow input[type="number"] {
+  min-width: 0;
+}
+
 .fieldLabel {
   display: flex;
   flex-wrap: wrap;
@@ -503,7 +541,8 @@ dd {
   }
 
   .grid.two,
-  .facetGrid {
+  .facetGrid,
+  .presetGrid {
     grid-template-columns: 1fr;
   }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { byteValue, configToSettings, durationToSeconds, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapSettingsToForm } from './timeflip-format.js';
+import { byteValue, configToSettings, durationToSeconds, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus } from './timeflip-format.js';
 
 test('converts Go duration nanoseconds to seconds', () => {
   assert.equal(durationToSeconds(15_000_000_000, 1), 15);
@@ -47,6 +47,38 @@ test('maps tap settings to editable byte fields', () => {
   assert.equal(byteValue(300, 20), 255);
   assert.equal(byteValue(-1, 20), 0);
   assert.equal(byteValue('nope', 20), 20);
+});
+
+test('maps tap presets to selected device forms', () => {
+  assert.deepEqual(tapPresetToForm({
+    id: 'sensitive',
+    settings: { threshold: 14, limit: 8, latency: 3, window: 24 },
+  }, 'd2'), {
+    deviceID: 'd2',
+    threshold: 14,
+    limit: 8,
+    latency: 3,
+    window: 24,
+    confirmedOnDevice: false,
+  });
+});
+
+test('converts tap form to clamped settings', () => {
+  assert.deepEqual(tapFormToSettings({ threshold: 300, limit: -4, latency: 'nope', window: 33 }, 'd3'), {
+    deviceID: 'd3',
+    threshold: 255,
+    limit: 0,
+    latency: 5,
+    window: 33,
+  });
+});
+
+test('labels tap tuning status', () => {
+  assert.equal(tapTuningStatus({ active: true, status: 'temporary' }, null), 'temporary');
+  assert.equal(tapTuningStatus({ active: true, status: 'restore needed' }, null), 'restore needed');
+  assert.equal(tapTuningStatus(null, { confirmedOnDevice: true }), 'confirmed on device');
+  assert.equal(tapTuningStatus(null, { confirmedOnDevice: false }), 'saved locally');
+  assert.equal(tapTuningStatus(null, null), 'defaults');
 });
 
 test('maps LED settings to editable fields', () => {

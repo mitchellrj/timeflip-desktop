@@ -173,7 +173,7 @@ AppState "1" -- "0..*" TapTuningState : exposes active sessions
 3. Methods:
    - `func DefaultTapTuningPresets(deviceID string) []TapTuningPreset`
      - Logic:
-       - Return three presets: balanced uses existing defaults `20/10/5/30`; sensitive lowers threshold and shortens timing values modestly; deliberate raises threshold and widens timing values.
+       - Return three presets: balanced uses existing defaults `20/10/5/30`; sensitive lowers threshold and widens timing values so lighter or slightly slower double taps are easier to catch; deliberate raises threshold and narrows timing values so accidental bumps are less likely to register.
        - Use byte values only and fill `DeviceID` for each preset.
    - `func ValidateDeviceTapSettings(settings DeviceTapSettings) error`
      - Logic:
