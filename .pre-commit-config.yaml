@@ -1,0 +1,42 @@
+minimum_pre_commit_version: "4.6.0"
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: ^build/
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+        exclude: ^build/
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  - repo: local
+    hooks:
+      - id: go-quality
+        name: Go format, vet, tests, and module hygiene
+        entry: scripts/dev/pre-commit-go.sh
+        language: system
+        pass_filenames: false
+        files: ^(.*\.go|go\.mod|go\.sum)$
+      - id: shell-syntax
+        name: Shell syntax
+        entry: scripts/dev/pre-commit-shell.sh
+        language: system
+        pass_filenames: false
+        files: ^scripts/.*\.sh$
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.12.1
+    hooks:
+      - id: golangci-lint
+        args: [--timeout=5m]
+        pass_filenames: false
+        files: ^.*\.go$
