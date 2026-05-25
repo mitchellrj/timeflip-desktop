@@ -2,29 +2,30 @@ package app
 
 import (
 	"context"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"sync"
 )
 
 type WailsEventBus struct {
-	ctx context.Context
+	mu      sync.RWMutex
+	emitter func(string, any)
 }
 
 func NewWailsEventBus() *WailsEventBus {
 	return &WailsEventBus{}
 }
 
-func (b *WailsEventBus) SetContext(ctx context.Context) {
-	b.ctx = ctx
+func (b *WailsEventBus) SetEmitter(emitter func(string, any)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.emitter = emitter
 }
 
-func (b *WailsEventBus) Publish(ctx context.Context, name string, payload any) {
-	target := ctx
-	if target == nil || target.Err() != nil {
-		target = b.ctx
-	}
-	if target == nil {
+func (b *WailsEventBus) Publish(_ context.Context, name string, payload any) {
+	b.mu.RLock()
+	emitter := b.emitter
+	b.mu.RUnlock()
+	if emitter == nil {
 		return
 	}
-	runtime.EventsEmit(target, name, payload)
+	emitter(name, payload)
 }

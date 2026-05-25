@@ -10,9 +10,9 @@ This file tracks intentional first-pass gaps from `/spdd-generate` for `spdd/pro
 
 ## Desktop Shell
 
-- Replace the minimal menu-bar service boundary with real macOS menu-bar integration if Wails support is sufficient, or document the chosen plugin/native bridge.
-- Generate Wails bindings as part of the normal frontend workflow once the Wails CLI is installed in the developer environment.
-- Replace the static `frontend/dist/index.html` fallback with a built artifact from `frontend/src` during normal Wails builds.
+- Manually QA the Wails v3 system tray control centre on macOS: tray icon visibility, menu refresh, attached-window positioning, close-to-hide behaviour, pause/resume action, and explicit Quit.
+- Decide whether to keep tracking Wails v3 alpha releases directly or pin a reviewed upgrade cadence before packaging.
+- Consider adding frontend-specific DTOs with string timestamps if Wails binding generation warnings for `time.Time` become noisy. The current generated bindings work and type these fields as `any`.
 
 ## Frontend
 
@@ -31,4 +31,3 @@ This file tracks intentional first-pass gaps from `/spdd-generate` for `spdd/pro
 - Refine session-boundary rules with real event streams, especially lock state, undefined facets, double taps, and reconnect timing.
 - Add task-session conflict repair tooling if duplicate or overlapping sessions are observed during hardware testing.
 - Stage summary reporting only after task-session reconciliation is stable.
-

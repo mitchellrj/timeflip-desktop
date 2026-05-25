@@ -4,3 +4,4 @@ build/
 *.zip
 *.log
 /android-app
+frontend/node_modules/

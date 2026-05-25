@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Bluetooth, Clock3, History, Pause, Play, RefreshCw, Settings, SlidersHorizontal, Tag } from 'lucide-react';
+import { Events } from '@wailsio/runtime';
+import { GetAppState, ScanDevices, SetPaused } from '../bindings/github.com/mitchellrj/timeflip-desktop/internal/app/controller.js';
 import './styles.css';
-
-const api = globalThis.go?.app?.Controller;
 
 function App() {
   const [state, setState] = useState({ devices: [], states: [], tasks: [], sessions: [], facetConfigs: [] });
@@ -11,11 +11,8 @@ function App() {
   const [selectedDevice, setSelectedDevice] = useState('');
 
   async function refresh() {
-    if (!api?.GetAppState) {
-      return;
-    }
     try {
-      const next = await api.GetAppState();
+      const next = await GetAppState();
       setState(next);
       if (!selectedDevice && next.devices?.length) {
         setSelectedDevice(next.devices[0].id);
@@ -28,6 +25,10 @@ function App() {
 
   useEffect(() => {
     refresh();
+    const offRefresh = Events.On('shell.refresh', refresh);
+    return () => {
+      offRefresh();
+    };
   }, []);
 
   const activeState = useMemo(() => state.states?.find((item) => item.deviceID === selectedDevice) || state.states?.[0], [state, selectedDevice]);
@@ -61,14 +62,14 @@ function App() {
             <h2>{currentSession?.taskLabelSnapshot || (activeState?.paused ? 'Paused' : 'No active session')}</h2>
             <p>{activeState?.connectionState || 'No device connected'} · facet {activeState?.currentFacetKnown ? activeState.currentFacet : 'unknown'}</p>
           </div>
-          <button className="iconButton" onClick={() => selectedDevice && api?.SetPaused?.(selectedDevice, !activeState?.paused).then(refresh)}>
+            <button className="iconButton" onClick={() => selectedDevice && SetPaused(selectedDevice, !activeState?.paused).then(refresh)}>
             {activeState?.paused ? <Play size={20} /> : <Pause size={20} />}
           </button>
         </section>
 
         <section id="devices" className="grid two">
           <Panel title="Devices" icon={<Bluetooth size={18} />}>
-            <button onClick={() => api?.ScanDevices?.().then(refresh)}><RefreshCw size={16} /> Scan</button>
+            <button onClick={() => ScanDevices().then(refresh)}><RefreshCw size={16} /> Scan</button>
             <div className="list">
               {state.devices?.map((device) => (
                 <button key={device.id} className={`row ${selectedDevice === device.id ? 'selected' : ''}`} onClick={() => setSelectedDevice(device.id)}>
@@ -138,4 +139,3 @@ function Panel({ title, icon, children }) {
 }
 
 createRoot(document.getElementById('root')).render(<App />);
-
