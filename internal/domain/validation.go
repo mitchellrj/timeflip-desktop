@@ -90,16 +90,6 @@ func ValidateDeviceTapSettings(settings DeviceTapSettings) error {
 	if strings.TrimSpace(settings.DeviceID) == "" {
 		return ValidationError{NewAppError(ErrValidation, "Device ID is required.", "tap settings device id is empty", nil)}
 	}
-	for label, value := range map[string]uint8{
-		"threshold": settings.Threshold,
-		"limit":     settings.Limit,
-		"latency":   settings.Latency,
-		"window":    settings.Window,
-	} {
-		if value > 255 {
-			return ValidationError{NewAppError(ErrValidation, "Tap settings must be byte register values.", label+" outside TimeFlip2 byte range", nil)}
-		}
-	}
 	return nil
 }
 

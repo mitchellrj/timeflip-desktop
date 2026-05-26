@@ -125,20 +125,20 @@ func (l *traceLogger) event(name string, deviceID timeflip.DeviceID, characteris
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(l.out, "time=%s event=%s", time.Now().Format(time.RFC3339Nano), name)
+	_, _ = fmt.Fprintf(l.out, "time=%s event=%s", time.Now().Format(time.RFC3339Nano), name)
 	if deviceID != "" {
-		fmt.Fprintf(l.out, " device=%s", deviceID)
+		_, _ = fmt.Fprintf(l.out, " device=%s", deviceID)
 	}
 	if characteristic != "" {
-		fmt.Fprintf(l.out, " characteristic=%s", characteristic)
+		_, _ = fmt.Fprintf(l.out, " characteristic=%s", characteristic)
 	}
 	if payload != nil {
-		fmt.Fprintf(l.out, " bytes=%d hex=0x%X", len(payload), payload)
+		_, _ = fmt.Fprintf(l.out, " bytes=%d hex=0x%X", len(payload), payload)
 	}
 	if err != nil {
-		fmt.Fprintf(l.out, " error=%q", err)
+		_, _ = fmt.Fprintf(l.out, " error=%q", err)
 	}
-	fmt.Fprintln(l.out)
+	_, _ = fmt.Fprintln(l.out)
 }
 
 func traceReadError(ch timeflip.CharacteristicID, err error) error {

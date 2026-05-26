@@ -172,7 +172,7 @@ func (s *SQLiteStore) ensureColumn(ctx context.Context, table string, column str
 	if err != nil {
 		return wrapStoreErr("Could not inspect local database schema.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cid int
 		var name, typ string
@@ -228,7 +228,7 @@ func (s *SQLiteStore) ListDeviceProfiles(ctx context.Context) ([]domain.DevicePr
 	if err != nil {
 		return nil, wrapStoreErr("Could not list device profiles.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.DeviceProfile
 	for rows.Next() {
 		p, err := scanDeviceProfile(rows)
@@ -269,7 +269,7 @@ func (s *SQLiteStore) ListTasks(ctx context.Context, includeArchived bool) ([]do
 	if err != nil {
 		return nil, wrapStoreErr("Could not list tasks.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.Task
 	for rows.Next() {
 		var t domain.Task
@@ -325,7 +325,7 @@ func (s *SQLiteStore) ListFacetAssignments(ctx context.Context, deviceID string)
 	if err != nil {
 		return nil, wrapStoreErr("Could not list facet assignments.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.FacetAssignment
 	for rows.Next() {
 		a, err := scanAssignment(rows)
@@ -411,7 +411,7 @@ func (s *SQLiteStore) ListDeviceTapSettings(ctx context.Context) ([]domain.Devic
 	if err != nil {
 		return nil, wrapStoreErr("Could not list tap settings.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.DeviceTapSettings
 	for rows.Next() {
 		settings, err := scanTapSettings(rows)
@@ -449,7 +449,7 @@ func (s *SQLiteStore) ListDeviceLEDSettings(ctx context.Context) ([]domain.Devic
 	if err != nil {
 		return nil, wrapStoreErr("Could not list LED settings.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.DeviceLEDSettings
 	for rows.Next() {
 		settings, err := scanLEDSettings(rows)
@@ -480,7 +480,7 @@ func (s *SQLiteStore) ListDeviceEvents(ctx context.Context, deviceID string) ([]
 	if err != nil {
 		return nil, wrapStoreErr("Could not list device events.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.DeviceEventRecord
 	for rows.Next() {
 		var e domain.DeviceEventRecord
@@ -550,7 +550,7 @@ func (s *SQLiteStore) ListTaskSessions(ctx context.Context, filter domain.TaskSe
 	if err != nil {
 		return nil, wrapStoreErr("Could not list task sessions.", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.TaskSession
 	for rows.Next() {
 		session, err := scanSession(rows)

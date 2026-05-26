@@ -19,7 +19,7 @@ func TestSetPausedPersistsDeviceState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -56,7 +56,7 @@ func TestConfigureTapSettingsPersistsAndWritesDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -290,7 +290,7 @@ func TestConfigureLEDSettingsPersistsAndWritesDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -336,7 +336,7 @@ func TestConfigureDeviceNamePersistsAndWritesDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -381,7 +381,7 @@ func TestConfigureDeviceNameSavesPendingNameWhenDisconnected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -426,7 +426,7 @@ func TestConfigureFacetWritesDeviceColour(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -480,7 +480,7 @@ func TestConfigureFacetWritesExplicitPomodoroMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -535,7 +535,7 @@ func TestConnectDeviceAppliesUnconfirmedFacetAssignments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -598,7 +598,7 @@ func TestRefreshDeviceStatePublishesReconnectBeforeCloseReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -635,7 +635,7 @@ func TestConnectDeviceIsNoopWhenHandleAlreadyActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -671,7 +671,7 @@ func TestConnectDeviceSerializesConcurrentAttempts(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -710,7 +710,7 @@ func TestConnectDeviceDoesNotPublishDeviceErrorWhenHistoryImportFails(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -745,7 +745,7 @@ func TestConnectDeviceUsesAutoProtocolForStoredV4Profile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -778,7 +778,7 @@ func TestUnpairDeviceResetsCurrentStateAndClosesSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -856,7 +856,7 @@ func TestPairDeviceResetsClosedSessionState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
@@ -913,20 +913,6 @@ func TestPairDeviceResetsClosedSessionState(t *testing.T) {
 	if !hasPublishedEvent(bus.Events, "device.state") || !hasPublishedEvent(bus.Events, "device.connection") || !hasPublishedEvent(bus.Events, "device.pairing") {
 		t.Fatalf("expected reset and pairing events, got %#v", bus.Events)
 	}
-}
-
-func newDeviceTestStore(t *testing.T, ctx context.Context) (*store.SQLiteStore, func()) {
-	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	st := store.NewSQLiteStore(db)
-	if err := st.Migrate(ctx); err != nil {
-		_ = db.Close()
-		t.Fatal(err)
-	}
-	return st, func() {}
 }
 
 func hasPublishedEvent(events []PublishedEvent, name string) bool {

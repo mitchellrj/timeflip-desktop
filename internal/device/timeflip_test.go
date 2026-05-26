@@ -1,8 +1,10 @@
 package device
 
-import "testing"
+import (
+	"testing"
 
-import "github.com/mitchellrj/timeflip-desktop/internal/domain"
+	"github.com/mitchellrj/timeflip-desktop/internal/domain"
+)
 
 func TestParseHexColorScalesToTimeFlipRGB(t *testing.T) {
 	r, g, b := parseHexColor("#2255AA")

@@ -14,7 +14,7 @@ func TestSQLiteStoreMigrateTwiceAndPersistTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	s := NewSQLiteStore(db)
 	ctx := context.Background()

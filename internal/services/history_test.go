@@ -16,7 +16,7 @@ func TestReconcileEventsToSessionsSkipsPreviouslyImportedHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
 	if err := st.Migrate(ctx); err != nil {
