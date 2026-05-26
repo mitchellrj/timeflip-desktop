@@ -47,50 +47,86 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build SLSA artifacts (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: Build macOS desktop bundle
     needs: validate-tag
+    runs-on: macos-latest
     permissions:
-      id-token: write
-      contents: write
-      actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            config-file: .slsa-goreleaser/linux-amd64.yml
-          - goos: linux
-            goarch: arm64
-            config-file: .slsa-goreleaser/linux-arm64.yml
-    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v2.1.0
-    with:
-      go-version-file: go.mod
-      config-file: ${{ matrix.config-file }}
-      upload-assets: true
-      upload-tag-name: ${{ needs.validate-tag.outputs.tag }}
-      prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # tag==v6.0.2
 
-  checksums:
-    name: Publish SHA256 checksums
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # tag==v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # tag==v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+
+      - name: Build desktop binary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arch="$(uname -m)"
+          bundle_dir="build/release-bundle/timeflip-desktop"
+          asset="timeflip-desktop-darwin-${arch}.tar.gz"
+
+          mkdir -p "$bundle_dir" build/release-assets
+          go build -trimpath -o "$bundle_dir/timeflip-desktop" ./cmd/timeflip-desktop
+          mkdir -p "$bundle_dir/frontend"
+          cp -R frontend/dist "$bundle_dir/frontend/dist"
+          cp README.md LICENSE "$bundle_dir/"
+          tar -C build/release-bundle -czf "build/release-assets/${asset}" timeflip-desktop
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag==v7.0.1
+        with:
+          name: release-assets
+          path: build/release-assets/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
     needs:
       - validate-tag
       - build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.validate-tag.outputs.tag }}
+      IS_PRERELEASE: ${{ needs.validate-tag.outputs.is_prerelease }}
     steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # tag==v6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Download release artifacts
         shell: bash
         run: |
           set -euo pipefail
 
           mkdir -p build/release-assets
-          gh release download "$RELEASE_TAG" \
-            --pattern 'timeflip-demo-*' \
+          gh run download "$GITHUB_RUN_ID" \
+            --name release-assets \
             --dir build/release-assets
 
       - name: Generate checksums
@@ -113,6 +149,25 @@ jobs:
 
           sha256sum "${files[@]}" > SHA256SUMS.txt
 
-      - name: Upload checksums
+      - name: Create release with assets and tag notes
         shell: bash
-        run: gh release upload "$RELEASE_TAG" build/release-assets/SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            printf 'Release %s already exists; not modifying existing release.\n' "$RELEASE_TAG"
+            exit 0
+          fi
+
+          args=(--title "$RELEASE_TAG" --notes-from-tag)
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+
+          mapfile -t assets < <(find build/release-assets -maxdepth 1 -type f -print | sort)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            printf 'No release assets found.\n' >&2
+            exit 1
+          fi
+
+          gh release create "$RELEASE_TAG" "${args[@]}" "${assets[@]}"

@@ -670,6 +670,7 @@ func TestConnectDeviceSerializesConcurrentAttempts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db.SetMaxOpenConns(1)
 	defer db.Close()
 	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
@@ -1088,6 +1089,7 @@ type blockingCloseClient struct {
 	snapshotErr error
 	release     chan struct{}
 	done        chan struct{}
+	doneOnce    sync.Once
 }
 
 func (c *blockingCloseClient) ReadDeviceSnapshot(context.Context, device.Handle) (domain.DeviceSnapshot, error) {
@@ -1095,7 +1097,7 @@ func (c *blockingCloseClient) ReadDeviceSnapshot(context.Context, device.Handle)
 }
 
 func (c *blockingCloseClient) Close(ctx context.Context, _ device.Handle) error {
-	defer close(c.done)
+	defer c.doneOnce.Do(func() { close(c.done) })
 	select {
 	case <-c.release:
 		return nil
@@ -1176,9 +1178,7 @@ func (pauseClient) ReadHistory(context.Context, device.Handle, device.HistoryReq
 }
 
 func (pauseClient) Events(context.Context, device.Handle) (<-chan domain.DeviceEventRecord, <-chan error, error) {
-	events := make(chan domain.DeviceEventRecord)
-	errs := make(chan error)
-	return events, errs, nil
+	return nil, nil, errors.New("stream unavailable")
 }
 
 func (pauseClient) Close(context.Context, device.Handle) error {
