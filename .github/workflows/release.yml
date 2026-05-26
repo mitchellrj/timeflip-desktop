@@ -77,6 +77,60 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Install Apple signing certificate
+        shell: bash
+        env:
+          MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          MACOS_NOTARYTOOL_APPLE_ID: ${{ secrets.MACOS_NOTARYTOOL_APPLE_ID }}
+          MACOS_NOTARYTOOL_TEAM_ID: ${{ secrets.MACOS_NOTARYTOOL_TEAM_ID }}
+          MACOS_NOTARYTOOL_PASSWORD: ${{ secrets.MACOS_NOTARYTOOL_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          required=(
+            MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64
+            MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD
+            MACOS_DEVELOPER_ID_APPLICATION_IDENTITY
+            MACOS_NOTARYTOOL_APPLE_ID
+            MACOS_NOTARYTOOL_TEAM_ID
+            MACOS_NOTARYTOOL_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              printf 'Required release signing secret %s is not configured.\n' "$name" >&2
+              exit 1
+            fi
+          done
+
+          keychain_path="$RUNNER_TEMP/timeflip-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          cert_path="$RUNNER_TEMP/developer-id-application.p12"
+
+          printf '%s' "$MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64" | base64 -D > "$cert_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$cert_path" \
+            -k "$keychain_path" \
+            -P "$MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security list-keychains -d user -s "$keychain_path"
+          security default-keychain -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+
+          security find-identity -v -p codesigning "$keychain_path"
+          if ! security find-identity -v -p codesigning "$keychain_path" | grep -F "$MACOS_DEVELOPER_ID_APPLICATION_IDENTITY"; then
+            printf 'Developer ID Application identity was not found in the signing keychain.\n' >&2
+            exit 1
+          fi
+
       - name: Build frontend assets
         shell: bash
         run: |
@@ -87,13 +141,21 @@ jobs:
 
       - name: Build desktop app archive
         shell: bash
+        env:
+          MACOS_DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          MACOS_NOTARYTOOL_APPLE_ID: ${{ secrets.MACOS_NOTARYTOOL_APPLE_ID }}
+          MACOS_NOTARYTOOL_TEAM_ID: ${{ secrets.MACOS_NOTARYTOOL_TEAM_ID }}
+          MACOS_NOTARYTOOL_PASSWORD: ${{ secrets.MACOS_NOTARYTOOL_PASSWORD }}
         run: |
           set -euo pipefail
 
           app_name="TimeFlip Desktop.app"
           app_dir="build/release-bundle/${app_name}"
           asset="timeflip-desktop-darwin-${{ matrix.goarch }}.zip"
+          notary_asset="$RUNNER_TEMP/${asset}"
           version="${{ needs.validate-tag.outputs.version }}"
+          marketing_version="${version%%[-+]*}"
+          build_version="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
 
           mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/frontend" build/release-assets
           actual_arch="$(go env GOARCH)"
@@ -125,9 +187,9 @@ jobs:
             <key>CFBundlePackageType</key>
             <string>APPL</string>
             <key>CFBundleShortVersionString</key>
-            <string>${version}</string>
+            <string>${marketing_version}</string>
             <key>CFBundleVersion</key>
-            <string>${version}</string>
+            <string>${build_version}</string>
             <key>LSMinimumSystemVersion</key>
             <string>13.0</string>
           </dict>
@@ -136,12 +198,28 @@ jobs:
 
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app_dir/Contents/Info.plist")" = "TimeFlip Desktop"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_dir/Contents/Info.plist")" = "com.mitchellrj.timeflip-desktop"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$version"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$marketing_version"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_dir/Contents/Info.plist")" = "$build_version"
           test -x "$app_dir/Contents/MacOS/timeflip-desktop"
           test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
-          codesign --force --deep --sign - "$app_dir"
+          codesign \
+            --force \
+            --deep \
+            --options runtime \
+            --timestamp \
+            --sign "$MACOS_DEVELOPER_ID_APPLICATION_IDENTITY" \
+            "$app_dir"
           codesign --verify --deep --strict --verbose=4 "$app_dir"
-          (cd build/release-bundle && zip -qry -X "../release-assets/${asset}" "$app_name")
+          ditto -c -k --keepParent "$app_dir" "$notary_asset"
+          xcrun notarytool submit "$notary_asset" \
+            --apple-id "$MACOS_NOTARYTOOL_APPLE_ID" \
+            --team-id "$MACOS_NOTARYTOOL_TEAM_ID" \
+            --password "$MACOS_NOTARYTOOL_PASSWORD" \
+            --wait
+          xcrun stapler staple "$app_dir"
+          xcrun stapler validate "$app_dir"
+          codesign --verify --deep --strict --verbose=4 "$app_dir"
+          ditto -c -k --keepParent "$app_dir" "build/release-assets/${asset}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag==v7.0.1
@@ -149,6 +227,12 @@ jobs:
           name: release-assets-darwin-${{ matrix.goarch }}
           path: build/release-assets/*
           if-no-files-found: error
+
+      - name: Delete Apple signing keychain
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/timeflip-signing.keychain-db" || true
 
   collect-release-assets:
     name: Collect release assets
