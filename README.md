@@ -1,5 +1,11 @@
 # TimeFlip Desktop
 
+[![CI](https://github.com/mitchellrj/timeflip-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchellrj/timeflip-desktop/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mitchellrj/timeflip-desktop)](https://goreportcard.com/report/github.com/mitchellrj/timeflip-desktop)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mitchellrj/timeflip-desktop/badge)](https://scorecard.dev/viewer/?uri=github.com/mitchellrj/timeflip-desktop)
+[![Release](https://github.com/mitchellrj/timeflip-desktop/actions/workflows/release.yml/badge.svg)](https://github.com/mitchellrj/timeflip-desktop/actions/workflows/release.yml)
+[![License: WTFPL](https://img.shields.io/badge/License-WTFPL-blue.svg)](http://www.wtfpl.net/about/)
+
 Local-first desktop tracking for TimeFlip2 devices.
 
 This app pairs with a TimeFlip2, stores local task/facet configuration, tracks task sessions from facet changes, and provides a Wails desktop shell with a system tray control centre.
