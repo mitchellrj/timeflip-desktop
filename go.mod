@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/mitchellrj/timeflip-go v1.2.3
 	github.com/tinygo-org/cbgo v0.0.4
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.95
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.96
 	modernc.org/sqlite v1.50.1
 )
 
