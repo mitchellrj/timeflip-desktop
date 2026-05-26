@@ -78,6 +78,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Apple signing certificate
+        id: apple-signing
         shell: bash
         env:
           MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
@@ -97,12 +98,36 @@ jobs:
             MACOS_NOTARYTOOL_TEAM_ID
             MACOS_NOTARYTOOL_PASSWORD
           )
+          configured=0
           for name in "${required[@]}"; do
-            if [[ -z "${!name}" ]]; then
-              printf 'Required release signing secret %s is not configured.\n' "$name" >&2
-              exit 1
+            if [[ -n "${!name}" ]]; then
+              configured=$((configured + 1))
             fi
           done
+
+          if [[ "$configured" -eq 0 ]]; then
+            printf 'available=false\n' >> "$GITHUB_OUTPUT"
+            printf 'Apple signing secrets are not configured; release assets will be ad-hoc signed and named *-adhoc-signed.zip.\n'
+            exit 0
+          fi
+
+          if [[ "$configured" -ne "${#required[@]}" ]]; then
+            printf 'Apple signing is partially configured. Either configure every signing secret or none of them.\n' >&2
+            for name in "${required[@]}"; do
+              if [[ -z "${!name}" ]]; then
+                printf 'Missing release signing secret: %s\n' "$name" >&2
+              fi
+            done
+            exit 1
+          fi
+
+          printf 'available=true\n' >> "$GITHUB_OUTPUT"
+
+          required_identity_prefix="Developer ID Application:"
+          if [[ "$MACOS_DEVELOPER_ID_APPLICATION_IDENTITY" != "$required_identity_prefix"* ]]; then
+            printf 'MACOS_DEVELOPER_ID_APPLICATION_IDENTITY must be a Developer ID Application identity.\n' >&2
+            exit 1
+          fi
 
           keychain_path="$RUNNER_TEMP/timeflip-signing.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
@@ -142,6 +167,7 @@ jobs:
       - name: Build desktop app archive
         shell: bash
         env:
+          APPLE_SIGNING_AVAILABLE: ${{ steps.apple-signing.outputs.available }}
           MACOS_DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_IDENTITY }}
           MACOS_NOTARYTOOL_APPLE_ID: ${{ secrets.MACOS_NOTARYTOOL_APPLE_ID }}
           MACOS_NOTARYTOOL_TEAM_ID: ${{ secrets.MACOS_NOTARYTOOL_TEAM_ID }}
@@ -151,8 +177,12 @@ jobs:
 
           app_name="TimeFlip Desktop.app"
           app_dir="build/release-bundle/${app_name}"
-          asset="timeflip-desktop-darwin-${{ matrix.goarch }}.zip"
-          notary_asset="$RUNNER_TEMP/${asset}"
+          asset_suffix=""
+          if [[ "$APPLE_SIGNING_AVAILABLE" != "true" ]]; then
+            asset_suffix="-adhoc-signed"
+          fi
+          asset="timeflip-desktop-darwin-${{ matrix.goarch }}${asset_suffix}.zip"
+          notary_asset="$RUNNER_TEMP/timeflip-desktop-darwin-${{ matrix.goarch }}-notary.zip"
           version="${{ needs.validate-tag.outputs.version }}"
           marketing_version="${version%%[-+]*}"
           build_version="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
@@ -208,22 +238,27 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSBluetoothPeripheralUsageDescription' "$app_dir/Contents/Info.plist")" != ""
           test -x "$app_dir/Contents/MacOS/timeflip-desktop"
           test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
-          codesign \
-            --force \
-            --deep \
-            --options runtime \
-            --timestamp \
-            --sign "$MACOS_DEVELOPER_ID_APPLICATION_IDENTITY" \
-            "$app_dir"
-          codesign --verify --deep --strict --verbose=4 "$app_dir"
-          ditto -c -k --keepParent "$app_dir" "$notary_asset"
-          xcrun notarytool submit "$notary_asset" \
-            --apple-id "$MACOS_NOTARYTOOL_APPLE_ID" \
-            --team-id "$MACOS_NOTARYTOOL_TEAM_ID" \
-            --password "$MACOS_NOTARYTOOL_PASSWORD" \
-            --wait
-          xcrun stapler staple "$app_dir"
-          xcrun stapler validate "$app_dir"
+          if [[ "$APPLE_SIGNING_AVAILABLE" == "true" ]]; then
+            codesign \
+              --force \
+              --deep \
+              --options runtime \
+              --timestamp \
+              --sign "$MACOS_DEVELOPER_ID_APPLICATION_IDENTITY" \
+              "$app_dir"
+            codesign --verify --deep --strict --verbose=4 "$app_dir"
+            ditto -c -k --keepParent "$app_dir" "$notary_asset"
+            xcrun notarytool submit "$notary_asset" \
+              --apple-id "$MACOS_NOTARYTOOL_APPLE_ID" \
+              --team-id "$MACOS_NOTARYTOOL_TEAM_ID" \
+              --password "$MACOS_NOTARYTOOL_PASSWORD" \
+              --wait
+            xcrun stapler staple "$app_dir"
+            xcrun stapler validate "$app_dir"
+          else
+            printf 'Apple signing secrets are unavailable; ad-hoc signing %s.\n' "$app_name"
+            codesign --force --deep --sign - "$app_dir"
+          fi
           codesign --verify --deep --strict --verbose=4 "$app_dir"
           ditto -c -k --keepParent "$app_dir" "build/release-assets/${asset}"
 
@@ -238,7 +273,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          security delete-keychain "$RUNNER_TEMP/timeflip-signing.keychain-db" || true
+          if [[ -f "$RUNNER_TEMP/timeflip-signing.keychain-db" ]]; then
+            security delete-keychain "$RUNNER_TEMP/timeflip-signing.keychain-db" || true
+          fi
 
   collect-release-assets:
     name: Collect release assets
