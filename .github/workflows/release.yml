@@ -245,7 +245,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             printf 'Release %s already exists; not modifying existing release.\n' "$RELEASE_TAG"
             exit 0
           fi
@@ -261,4 +261,4 @@ jobs:
             exit 1
           fi
 
-          gh release create "$RELEASE_TAG" "${args[@]}" --repo "$GITHUB_REPOSITORY" "${assets[@]}"
+          gh release create "$RELEASE_TAG" "${args[@]}" "${assets[@]}"
