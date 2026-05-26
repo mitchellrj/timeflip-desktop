@@ -47,11 +47,19 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build macOS desktop bundle
+    name: Build macOS desktop bundle (${{ matrix.goarch }})
     needs: validate-tag
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: macos-15-intel
+          - goarch: arm64
+            runner: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # tag==v6.0.2
@@ -82,11 +90,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          arch="$(uname -m)"
           bundle_dir="build/release-bundle/timeflip-desktop"
-          asset="timeflip-desktop-darwin-${arch}.tar.gz"
+          asset="timeflip-desktop-darwin-${{ matrix.goarch }}.tar.gz"
 
           mkdir -p "$bundle_dir" build/release-assets
+          actual_arch="$(go env GOARCH)"
+          if [[ "$actual_arch" != "${{ matrix.goarch }}" ]]; then
+            printf 'Runner Go architecture %s does not match expected %s.\n' "$actual_arch" "${{ matrix.goarch }}" >&2
+            exit 1
+          fi
           go build -trimpath -o "$bundle_dir/timeflip-desktop" ./cmd/timeflip-desktop
           mkdir -p "$bundle_dir/frontend"
           cp -R frontend/dist "$bundle_dir/frontend/dist"
@@ -96,15 +108,87 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag==v7.0.1
         with:
+          name: release-assets-darwin-${{ matrix.goarch }}
+          path: build/release-assets/*
+          if-no-files-found: error
+
+  collect-release-assets:
+    name: Collect release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      base64_subjects: ${{ steps.subjects.outputs.base64_subjects }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p build/release-assets
+          for artifact in \
+            release-assets-darwin-amd64 \
+            release-assets-darwin-arm64
+          do
+            gh run download "$GITHUB_RUN_ID" \
+              --name "$artifact" \
+              --dir build/release-assets
+          done
+
+      - name: Compute SLSA subjects
+        id: subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd build/release-assets
+          mapfile -t files < <(find . -maxdepth 1 -type f -name 'timeflip-desktop-darwin-*.tar.gz' -printf '%f\n' | sort)
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            printf 'No release artifacts found for SLSA subject generation.\n' >&2
+            exit 1
+          fi
+
+          sha256sum "${files[@]}" > subjects.sha256sum
+          {
+            printf 'base64_subjects='
+            base64 -w0 subjects.sha256sum
+            printf '\n'
+          } >> "$GITHUB_OUTPUT"
+          rm subjects.sha256sum
+
+      - name: Upload collected release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag==v7.0.1
+        with:
           name: release-assets
           path: build/release-assets/*
           if-no-files-found: error
+
+  provenance:
+    name: Generate SLSA provenance
+    needs: collect-release-assets
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    # SLSA verifier requires this reusable workflow ref to be refs/tags/vX.Y.Z.
+    # See:
+    # * https://github.com/slsa-framework/slsa-github-generator/blob/main/README.md#referencing-slsa-builders-and-generators
+    # * https://github.com/slsa-framework/slsa-github-generator/issues/4440
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.collect-release-assets.outputs.base64_subjects }}
+      provenance-name: timeflip-desktop-provenance.intoto.jsonl
+      upload-assets: false
 
   publish-release:
     name: Publish GitHub Release
     needs:
       - validate-tag
-      - build
+      - collect-release-assets
+      - provenance
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -127,6 +211,9 @@ jobs:
           mkdir -p build/release-assets
           gh run download "$GITHUB_RUN_ID" \
             --name release-assets \
+            --dir build/release-assets
+          gh run download "$GITHUB_RUN_ID" \
+            --name timeflip-desktop-provenance.intoto.jsonl \
             --dir build/release-assets
 
       - name: Generate checksums
