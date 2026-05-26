@@ -171,7 +171,7 @@ jobs:
     needs: collect-release-assets
     permissions:
       actions: read
-      contents: read
+      contents: write
       id-token: write
     # SLSA verifier requires this reusable workflow ref to be refs/tags/vX.Y.Z.
     # See:
