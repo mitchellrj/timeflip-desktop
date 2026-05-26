@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -15,16 +16,9 @@ import (
 )
 
 func TestSetPausedPersistsDeviceState(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -52,16 +46,9 @@ func TestSetPausedPersistsDeviceState(t *testing.T) {
 }
 
 func TestConfigureTapSettingsPersistsAndWritesDevice(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -286,16 +273,9 @@ func TestPreviewTapTuningRequiresActiveSession(t *testing.T) {
 }
 
 func TestConfigureLEDSettingsPersistsAndWritesDevice(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -332,16 +312,9 @@ func TestConfigureLEDSettingsPersistsAndWritesDevice(t *testing.T) {
 }
 
 func TestConfigureDeviceNamePersistsAndWritesDevice(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000", DisplayName: "Old", AdvertisedName: "Old"}); err != nil {
 		t.Fatal(err)
 	}
@@ -377,16 +350,9 @@ func TestConfigureDeviceNamePersistsAndWritesDevice(t *testing.T) {
 }
 
 func TestConfigureDeviceNameSavesPendingNameWhenDisconnected(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000", DisplayName: "Old", AdvertisedName: "Old"}); err != nil {
 		t.Fatal(err)
 	}
@@ -422,16 +388,9 @@ func TestConfigureDeviceNameSavesPendingNameWhenDisconnected(t *testing.T) {
 }
 
 func TestConfigureFacetWritesDeviceColour(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -476,16 +435,9 @@ func TestConfigureFacetWritesDeviceColour(t *testing.T) {
 }
 
 func TestConfigureFacetWritesExplicitPomodoroMode(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -531,16 +483,9 @@ func TestConfigureFacetWritesExplicitPomodoroMode(t *testing.T) {
 }
 
 func TestConnectDeviceAppliesUnconfirmedFacetAssignments(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -594,16 +539,8 @@ func TestShouldIgnoreTextFacetEvents(t *testing.T) {
 }
 
 func TestRefreshDeviceStatePublishesReconnectBeforeCloseReturns(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st := &trackingMemoryStore{}
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -631,16 +568,9 @@ func TestRefreshDeviceStatePublishesReconnectBeforeCloseReturns(t *testing.T) {
 }
 
 func TestConnectDeviceIsNoopWhenHandleAlreadyActive(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -666,17 +596,9 @@ func TestConnectDeviceIsNoopWhenHandleAlreadyActive(t *testing.T) {
 }
 
 func TestConnectDeviceSerializesConcurrentAttempts(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -706,16 +628,9 @@ func TestConnectDeviceSerializesConcurrentAttempts(t *testing.T) {
 }
 
 func TestConnectDeviceDoesNotPublishDeviceErrorWhenHistoryImportFails(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
 		t.Fatal(err)
 	}
@@ -741,16 +656,9 @@ func TestConnectDeviceDoesNotPublishDeviceErrorWhenHistoryImportFails(t *testing
 }
 
 func TestConnectDeviceUsesAutoProtocolForStoredV4Profile(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000", ProtocolVersion: "v4"}); err != nil {
 		t.Fatal(err)
 	}
@@ -774,16 +682,9 @@ func TestConnectDeviceUsesAutoProtocolForStoredV4Profile(t *testing.T) {
 }
 
 func TestUnpairDeviceResetsCurrentStateAndClosesSession(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000", PairingState: "paired"}); err != nil {
 		t.Fatal(err)
 	}
@@ -852,16 +753,9 @@ func TestUnpairDeviceResetsCurrentStateAndClosesSession(t *testing.T) {
 }
 
 func TestPairDeviceResetsClosedSessionState(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	st := store.NewSQLiteStore(db)
 	ctx := context.Background()
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
 	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "123456", PairingState: "paired", DisplayName: "TimeFlip"}); err != nil {
 		t.Fatal(err)
 	}
@@ -932,6 +826,21 @@ func hasConnectionState(events []PublishedEvent, state domain.ConnectionState) b
 		}
 	}
 	return false
+}
+
+func newDeviceSQLiteStore(t *testing.T, ctx context.Context) (*store.SQLiteStore, func()) {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "timeflip-test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	st := store.NewSQLiteStore(db)
+	if err := st.Migrate(ctx); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	return st, func() {}
 }
 
 type pauseClient struct {

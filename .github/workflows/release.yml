@@ -85,25 +85,61 @@ jobs:
           npm --prefix frontend ci
           npm --prefix frontend run build
 
-      - name: Build desktop binary
+      - name: Build desktop app archive
         shell: bash
         run: |
           set -euo pipefail
 
-          bundle_dir="build/release-bundle/timeflip-desktop"
-          asset="timeflip-desktop-darwin-${{ matrix.goarch }}.tar.gz"
+          app_name="TimeFlip Desktop.app"
+          app_dir="build/release-bundle/${app_name}"
+          asset="timeflip-desktop-darwin-${{ matrix.goarch }}.zip"
+          version="${{ needs.validate-tag.outputs.version }}"
 
-          mkdir -p "$bundle_dir" build/release-assets
+          mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/frontend" build/release-assets
           actual_arch="$(go env GOARCH)"
           if [[ "$actual_arch" != "${{ matrix.goarch }}" ]]; then
             printf 'Runner Go architecture %s does not match expected %s.\n' "$actual_arch" "${{ matrix.goarch }}" >&2
             exit 1
           fi
-          go build -trimpath -o "$bundle_dir/timeflip-desktop" ./cmd/timeflip-desktop
-          mkdir -p "$bundle_dir/frontend"
-          cp -R frontend/dist "$bundle_dir/frontend/dist"
-          cp README.md LICENSE "$bundle_dir/"
-          tar -C build/release-bundle -czf "build/release-assets/${asset}" timeflip-desktop
+          go build -trimpath -o "$app_dir/Contents/MacOS/timeflip-desktop" ./cmd/timeflip-desktop
+          cp -R frontend/dist "$app_dir/Contents/Resources/frontend/dist"
+          cp README.md LICENSE "$app_dir/Contents/Resources/"
+
+          cat > "$app_dir/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+            <key>CFBundleDisplayName</key>
+            <string>TimeFlip Desktop</string>
+            <key>CFBundleExecutable</key>
+            <string>timeflip-desktop</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.mitchellrj.timeflip-desktop</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>TimeFlip Desktop</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${version}</string>
+            <key>CFBundleVersion</key>
+            <string>${version}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>13.0</string>
+          </dict>
+          </plist>
+          PLIST
+
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app_dir/Contents/Info.plist")" = "TimeFlip Desktop"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_dir/Contents/Info.plist")" = "com.mitchellrj.timeflip-desktop"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$version"
+          test -x "$app_dir/Contents/MacOS/timeflip-desktop"
+          test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
+          (cd build/release-bundle && zip -qry -X "../release-assets/${asset}" "$app_name")
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag==v7.0.1
@@ -147,7 +183,7 @@ jobs:
           set -euo pipefail
 
           cd build/release-assets
-          mapfile -t files < <(find . -maxdepth 1 -type f -name 'timeflip-desktop-darwin-*.tar.gz' -printf '%f\n' | sort)
+          mapfile -t files < <(find . -maxdepth 1 -type f -name 'timeflip-desktop-darwin-*.zip' -printf '%f\n' | sort)
           if [[ "${#files[@]}" -eq 0 ]]; then
             printf 'No release artifacts found for SLSA subject generation.\n' >&2
             exit 1

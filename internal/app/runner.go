@@ -30,7 +30,7 @@ func RunWithOptions(opts Options) {
 		Name:        "TimeFlip Desktop",
 		Description: "Local TimeFlip2 task tracking",
 		Assets: application.AssetOptions{
-			Handler: application.BundledAssetFileServer(os.DirFS("frontend/dist")),
+			Handler: application.BundledAssetFileServer(frontendAssets()),
 		},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,

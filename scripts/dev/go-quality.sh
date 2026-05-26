@@ -5,6 +5,7 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
 export GOTRACEBACK="${GOTRACEBACK:-single}"
+go_test_package_parallelism="${GO_TEST_PKG_PARALLELISM:-1}"
 
 scripts/dev/pre-commit-go.sh
 
@@ -14,11 +15,11 @@ if [[ "$run_race" == "auto" && "$(go env GOOS)" != "darwin" ]]; then
 fi
 
 if [[ "$run_race" == "1" ]]; then
-  go test -count=1 -race ./...
+  go test -p="$go_test_package_parallelism" -count=1 -race ./...
 else
   printf 'Skipping Go race tests on %s; set RUN_GO_RACE=1 to force them.\n' "$(go env GOOS)"
 fi
 
 mkdir -p build
-go test -coverprofile=build/coverage.out ./...
+go test -p="$go_test_package_parallelism" -coverprofile=build/coverage.out ./...
 go build -o build/timeflip-desktop ./cmd/timeflip-desktop
