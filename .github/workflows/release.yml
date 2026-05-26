@@ -192,6 +192,10 @@ jobs:
             <string>${build_version}</string>
             <key>LSMinimumSystemVersion</key>
             <string>13.0</string>
+            <key>NSBluetoothAlwaysUsageDescription</key>
+            <string>TimeFlip Desktop connects to your TimeFlip device over Bluetooth to track task changes.</string>
+            <key>NSBluetoothPeripheralUsageDescription</key>
+            <string>TimeFlip Desktop connects to your TimeFlip device over Bluetooth to track task changes.</string>
           </dict>
           </plist>
           PLIST
@@ -200,6 +204,8 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_dir/Contents/Info.plist")" = "com.mitchellrj.timeflip-desktop"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$marketing_version"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_dir/Contents/Info.plist")" = "$build_version"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' "$app_dir/Contents/Info.plist")" != ""
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSBluetoothPeripheralUsageDescription' "$app_dir/Contents/Info.plist")" != ""
           test -x "$app_dir/Contents/MacOS/timeflip-desktop"
           test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
           codesign \
