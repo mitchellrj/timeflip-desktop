@@ -134,7 +134,11 @@ export function messageFromError(err) {
     }
     return err.message;
   }
-  return JSON.stringify(err);
+  const encoded = JSON.stringify(err);
+  if (!encoded || encoded === '{}') {
+    return 'Desktop runtime unavailable. Open TimeFlip Desktop to read device state.';
+  }
+  return encoded;
 }
 
 function parseRuntimeError(value) {

@@ -5,6 +5,7 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
 export GOTRACEBACK="${GOTRACEBACK:-single}"
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY="${OBJC_DISABLE_INITIALIZE_FORK_SAFETY:-YES}"
 go_test_package_parallelism="${GO_TEST_PKG_PARALLELISM:-1}"
 
 scripts/dev/pre-commit-go.sh

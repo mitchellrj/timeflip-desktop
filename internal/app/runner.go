@@ -11,7 +11,6 @@ import (
 	"github.com/mitchellrj/timeflip-desktop/internal/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"github.com/wailsapp/wails/v3/pkg/icons"
 )
 
 func RunWithOptions(opts Options) {
@@ -29,6 +28,7 @@ func RunWithOptions(opts Options) {
 	wailsApp := application.New(application.Options{
 		Name:        "TimeFlip Desktop",
 		Description: "Local TimeFlip2 task tracking",
+		Icon:        appIconPNG,
 		Assets: application.AssetOptions{
 			Handler: application.BundledAssetFileServer(frontendAssets()),
 		},
@@ -69,13 +69,9 @@ func RunWithOptions(opts Options) {
 func configureControlCentre(wailsApp *application.App, controller *Controller, window application.Window) {
 	systemTray := wailsApp.SystemTray.New()
 	systemTray.SetTooltip("TimeFlip Desktop")
-	if runtime.GOOS == "darwin" {
-		systemTray.SetTemplateIcon(icons.SystrayMacTemplate)
-	} else {
-		systemTray.SetLabel("TimeFlip")
-	}
 
 	rebuildMenu := func() {
+		setControlCentreIcon(systemTray, controller)
 		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
 	}
 
@@ -97,6 +93,26 @@ func configureControlCentre(wailsApp *application.App, controller *Controller, w
 	}
 }
 
+func setControlCentreIcon(systemTray *application.SystemTray, controller *Controller) {
+	state, err := controller.GetAppState()
+	paused := false
+	if err == nil {
+		paused = controlCentreDevice(state).paused
+	}
+	if runtime.GOOS == "darwin" {
+		systemTray.SetTemplateIcon(controlCentreTrayIcon(paused))
+		return
+	}
+	systemTray.SetIcon(controlCentreTrayIcon(paused))
+}
+
+func controlCentreTrayIcon(paused bool) []byte {
+	if paused {
+		return trayPausedIconPNG
+	}
+	return trayRunningIconPNG
+}
+
 func buildControlCentreMenu(wailsApp *application.App, controller *Controller, window application.Window, systemTray *application.SystemTray) *application.Menu {
 	state, err := controller.GetAppState()
 	menu := wailsApp.NewMenu()
@@ -113,6 +129,7 @@ func buildControlCentreMenu(wailsApp *application.App, controller *Controller, w
 	})
 	menu.Add("Refresh").OnClick(func(*application.Context) {
 		wailsApp.Event.Emit("shell.refresh")
+		setControlCentreIcon(systemTray, controller)
 		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
 	})
 
@@ -130,6 +147,7 @@ func buildControlCentreMenu(wailsApp *application.App, controller *Controller, w
 			return
 		}
 		wailsApp.Event.Emit("shell.refresh")
+		setControlCentreIcon(systemTray, controller)
 		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
 	})
 	lockLabel := "Lock Orientation"
@@ -145,6 +163,7 @@ func buildControlCentreMenu(wailsApp *application.App, controller *Controller, w
 			return
 		}
 		wailsApp.Event.Emit("shell.refresh")
+		setControlCentreIcon(systemTray, controller)
 		systemTray.SetMenu(buildControlCentreMenu(wailsApp, controller, window, systemTray))
 	})
 

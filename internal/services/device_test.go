@@ -482,6 +482,50 @@ func TestConfigureFacetWritesExplicitPomodoroMode(t *testing.T) {
 	}
 }
 
+func TestClearFacetConfigurationWritesUnassignedFacetToDevice(t *testing.T) {
+	ctx := context.Background()
+	st, closeStore := newDeviceSQLiteStore(t, ctx)
+	defer closeStore()
+	if err := st.SaveDeviceProfile(ctx, domain.DeviceProfile{ID: "d1", StoredPassword: "000000"}); err != nil {
+		t.Fatal(err)
+	}
+
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	client := &countingClient{facetView: domain.FacetConfigurationView{AssignedOnDevice: true}}
+	tasks := NewTaskService(st, tracking.clock)
+	svc := NewDeviceService(client, st, tasks, tracking, nil, bus, tracking.clock)
+	if _, err := svc.ConfigureFacet(ctx, domain.FacetConfigurationRequest{
+		DeviceID: "d1",
+		Facet:    3,
+		TaskID:   "task-1",
+		Label:    "Coding",
+		Icon:     "code",
+		Color:    "#2255AA",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc.handles["d1"] = pauseHandle("d1")
+	cleared, err := svc.ClearFacetConfiguration(ctx, "d1", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !cleared.AssignedOnDevice || cleared.TaskID != "" || cleared.Label != "" {
+		t.Fatalf("expected confirmed blank facet view, got %#v", cleared)
+	}
+	if len(client.facetAssignments) != 1 {
+		t.Fatalf("expected one device facet clear write, got %#v", client.facetAssignments)
+	}
+	written := client.facetAssignments[0]
+	if written.DeviceID != "d1" || written.Facet != 3 || written.TaskID != "" || written.IsPauseAssignment {
+		t.Fatalf("expected unassigned facet write, got %#v", written)
+	}
+	if _, err := st.GetFacetAssignment(ctx, "d1", 3); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected local facet assignment removed, got %v", err)
+	}
+}
+
 func TestConnectDeviceAppliesUnconfirmedFacetAssignments(t *testing.T) {
 	ctx := context.Background()
 	st, closeStore := newDeviceSQLiteStore(t, ctx)

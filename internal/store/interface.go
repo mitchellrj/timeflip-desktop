@@ -21,6 +21,8 @@ type Store interface {
 	SaveFacetAssignment(context.Context, domain.FacetAssignment) error
 	ListFacetAssignments(context.Context, string) ([]domain.FacetAssignment, error)
 	GetFacetAssignment(context.Context, string, uint8) (domain.FacetAssignment, error)
+	DeleteFacetAssignment(context.Context, string, uint8) error
+	DeleteFacetAssignments(context.Context, string) error
 
 	SaveDeviceState(context.Context, domain.DeviceState) error
 	GetDeviceState(context.Context, string) (domain.DeviceState, error)

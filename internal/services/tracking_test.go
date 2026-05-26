@@ -305,6 +305,14 @@ func (s *trackingMemoryStore) GetFacetAssignment(_ context.Context, _ string, fa
 	}
 	return assignment, nil
 }
+func (s *trackingMemoryStore) DeleteFacetAssignment(_ context.Context, _ string, facet uint8) error {
+	delete(s.assignments, facet)
+	return nil
+}
+func (s *trackingMemoryStore) DeleteFacetAssignments(context.Context, string) error {
+	s.assignments = map[uint8]domain.FacetAssignment{}
+	return nil
+}
 func (s *trackingMemoryStore) SaveDeviceState(_ context.Context, state domain.DeviceState) error {
 	s.state = state
 	return nil

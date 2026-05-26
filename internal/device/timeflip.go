@@ -199,7 +199,7 @@ func (c *TimeflipDeviceClient) WriteFacetConfiguration(ctx context.Context, hand
 	}
 	params := timeflip.TaskParameters{
 		Facet:                timeflip.FacetID(assignment.Facet),
-		Assigned:             !assignment.IsPauseAssignment,
+		Assigned:             facetAssignedOnDevice(assignment),
 		Mode:                 taskMode(assignment),
 		PomodoroLimitSeconds: assignment.PomodoroLimitSeconds,
 	}
@@ -217,12 +217,16 @@ func (c *TimeflipDeviceClient) WriteFacetConfiguration(ctx context.Context, hand
 		IsPauseAssignment:    assignment.IsPauseAssignment,
 		IsPomodoroAssignment: assignment.IsPomodoroAssignment,
 		PomodoroLimitSeconds: assignment.PomodoroLimitSeconds,
-		AssignedOnDevice:     err == nil && readback.Assigned == !assignment.IsPauseAssignment && readback.Mode == taskMode(assignment),
+		AssignedOnDevice:     err == nil && readback.Assigned == facetAssignedOnDevice(assignment) && readback.Mode == taskMode(assignment),
 	}
 	if err != nil {
 		return view, MapDeviceError(err)
 	}
 	return view, nil
+}
+
+func facetAssignedOnDevice(assignment domain.FacetAssignment) bool {
+	return assignment.TaskID != "" && !assignment.IsPauseAssignment
 }
 
 func taskMode(assignment domain.FacetAssignment) uint8 {

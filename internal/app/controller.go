@@ -141,6 +141,14 @@ func (c *Controller) SaveFacetAssignment(req domain.FacetConfigurationRequest) (
 	return c.devices.ConfigureFacet(c.context(), req)
 }
 
+func (c *Controller) ResetFacetConfiguration(deviceID string) ([]domain.FacetConfigurationView, error) {
+	return c.devices.ResetFacetConfiguration(c.context(), deviceID)
+}
+
+func (c *Controller) ClearFacetConfiguration(deviceID string, facet uint8) (domain.FacetConfigurationView, error) {
+	return c.devices.ClearFacetConfiguration(c.context(), deviceID, facet)
+}
+
 func (c *Controller) SetPaused(deviceID string, paused bool) error {
 	return c.devices.SetPaused(c.context(), deviceID, paused)
 }

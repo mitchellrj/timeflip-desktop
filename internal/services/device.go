@@ -216,6 +216,43 @@ func (s *DeviceService) ConfigureFacet(ctx context.Context, req domain.FacetConf
 	return view, nil
 }
 
+func (s *DeviceService) ResetFacetConfiguration(ctx context.Context, deviceID string) ([]domain.FacetConfigurationView, error) {
+	views, err := s.tasks.ResetFacetConfiguration(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	s.bus.Publish(ctx, "device.facets.reset", views)
+	return views, nil
+}
+
+func (s *DeviceService) ClearFacetConfiguration(ctx context.Context, deviceID string, facet uint8) (domain.FacetConfigurationView, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return domain.FacetConfigurationView{}, domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "Device ID is required.", "clear facet device id is empty", nil)}
+	}
+	if facet < 1 || facet > domain.FacetCount {
+		return domain.FacetConfigurationView{}, domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "Facet must be between 1 and 12.", "facet out of range", nil)}
+	}
+	assignedOnDevice := false
+	if handle, ok := s.currentHandle(deviceID); ok {
+		deviceView, err := s.client.WriteFacetConfiguration(ctx, handle, domain.FacetAssignment{
+			DeviceID:      deviceID,
+			Facet:         facet,
+			EffectiveFrom: s.clock.Now(),
+		})
+		if err != nil {
+			return domain.FacetConfigurationView{}, err
+		}
+		assignedOnDevice = deviceView.AssignedOnDevice
+	}
+	view, err := s.tasks.ClearFacetConfiguration(ctx, deviceID, facet)
+	if err != nil {
+		return domain.FacetConfigurationView{}, err
+	}
+	view.AssignedOnDevice = assignedOnDevice
+	s.bus.Publish(ctx, "device.facet.cleared", view)
+	return view, nil
+}
+
 func (s *DeviceService) ConfigureTapPause(ctx context.Context, deviceID string, paused bool) error {
 	return s.SetPaused(ctx, deviceID, paused)
 }

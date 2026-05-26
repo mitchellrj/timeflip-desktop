@@ -71,6 +71,29 @@ func TestSQLiteStoreMigrateTwiceAndPersistTask(t *testing.T) {
 	if !loadedAssignment.IsPomodoroAssignment || loadedAssignment.PomodoroLimitSeconds != 1500 || !loadedAssignment.ConfirmedOnDevice {
 		t.Fatalf("unexpected facet assignment: %#v", loadedAssignment)
 	}
+	if err := s.DeleteFacetAssignment(ctx, "d1", 1); err != nil {
+		t.Fatalf("delete one facet assignment: %v", err)
+	}
+	assignments, err := s.ListFacetAssignments(ctx, "d1")
+	if err != nil {
+		t.Fatalf("list facet assignments after single delete: %v", err)
+	}
+	if len(assignments) != 0 {
+		t.Fatalf("expected no facet assignments after single delete, got %#v", assignments)
+	}
+	if err := s.SaveFacetAssignment(ctx, assignment); err != nil {
+		t.Fatalf("save facet assignment again: %v", err)
+	}
+	if err := s.DeleteFacetAssignments(ctx, "d1"); err != nil {
+		t.Fatalf("delete facet assignments: %v", err)
+	}
+	assignments, err = s.ListFacetAssignments(ctx, "d1")
+	if err != nil {
+		t.Fatalf("list facet assignments after delete: %v", err)
+	}
+	if len(assignments) != 0 {
+		t.Fatalf("expected no facet assignments after delete, got %#v", assignments)
+	}
 
 	settings := domain.DeviceTapSettings{DeviceID: "d1", Threshold: 20, Limit: 10, Latency: 5, Window: 30, ConfirmedOnDevice: true}
 	if err := s.SaveDeviceTapSettings(ctx, settings); err != nil {

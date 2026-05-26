@@ -96,6 +96,7 @@ test('maps LED settings to editable fields', () => {
 test('normalises frontend error messages', () => {
   assert.equal(messageFromError('plain'), 'plain');
   assert.equal(messageFromError(new Error('boom')), 'boom');
+  assert.equal(messageFromError({}), 'Desktop runtime unavailable. Open TimeFlip Desktop to read device state.');
   assert.equal(messageFromError({
     message: 'device_timeout: Device operation failed.',
     cause: {

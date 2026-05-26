@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-go run "$(go env GOPATH)/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.95/cmd/wails3" generate bindings ./internal/app
+wails_dir="$(go list -m -f '{{.Dir}}' github.com/wailsapp/wails/v3)"
+go run "${wails_dir}/cmd/wails3" generate bindings ./internal/app

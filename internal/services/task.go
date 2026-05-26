@@ -138,6 +138,29 @@ func (s *TaskService) ListFacetConfiguration(ctx context.Context, deviceID strin
 	return views, nil
 }
 
+func (s *TaskService) ResetFacetConfiguration(ctx context.Context, deviceID string) ([]domain.FacetConfigurationView, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "Device ID is required.", "reset facets device id is empty", nil)}
+	}
+	if err := s.store.DeleteFacetAssignments(ctx, deviceID); err != nil {
+		return nil, err
+	}
+	return s.ListFacetConfiguration(ctx, deviceID)
+}
+
+func (s *TaskService) ClearFacetConfiguration(ctx context.Context, deviceID string, facet uint8) (domain.FacetConfigurationView, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return domain.FacetConfigurationView{}, domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "Device ID is required.", "clear facet device id is empty", nil)}
+	}
+	if facet < 1 || facet > domain.FacetCount {
+		return domain.FacetConfigurationView{}, domain.ValidationError{AppError: domain.NewAppError(domain.ErrValidation, "Facet must be between 1 and 12.", "facet out of range", nil)}
+	}
+	if err := s.store.DeleteFacetAssignment(ctx, deviceID, facet); err != nil {
+		return domain.FacetConfigurationView{}, err
+	}
+	return domain.FacetConfigurationView{DeviceID: deviceID, Facet: facet}, nil
+}
+
 func (s *TaskService) SetPomodoroForFacet(ctx context.Context, deviceID string, facet uint8, seconds uint32) (domain.FacetAssignment, error) {
 	assignment, err := s.store.GetFacetAssignment(ctx, deviceID, facet)
 	if err != nil {

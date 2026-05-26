@@ -1,32 +1,84 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  Activity,
+  BatteryFull,
   Bluetooth,
+  BookMarked,
+  BriefcaseBusiness,
+  Bug,
+  CalendarCheck,
+  Camera,
+  ChartNoAxesCombined,
+  ChartPie,
   Check,
+  ChevronDown,
+  CircleDollarSign,
   Clock3,
+  Coffee,
+  Code2,
+  CodeXml,
+  Cog,
+  Dumbbell,
+  Facebook,
+  File,
+  FileSearch,
+  FileText,
+  Gamepad2,
+  Globe2,
+  GraduationCap,
+  Handshake,
+  HardHat,
+  Headset,
   History,
+  Home,
+  Instagram,
+  Key,
   KeyRound,
+  Layers,
+  Lightbulb,
+  List,
   Lock,
+  MailOpen,
+  Megaphone,
+  MessagesSquare,
+  MicVocal,
+  Music2,
+  Palette,
   Pause,
+  PenTool,
+  Pencil,
+  Phone,
   Play,
   Plus,
   Plug,
+  Puzzle,
   RefreshCw,
+  Repeat2,
   RotateCcw,
   Save,
+  Search,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   SlidersHorizontal,
   Tag,
   Trash2,
+  Truck,
+  Tv,
+  Twitter,
   Unlock,
   Unplug,
+  UsersRound,
   X,
+  Youtube,
+  Zap,
 } from 'lucide-react';
 import { Events } from '@wailsio/runtime';
 import {
   BeginTapTuning,
   CancelTapTuning,
+  ClearFacetConfiguration,
   ConfirmTapTuningSettings,
   ConnectDevice,
   DisconnectDevice,
@@ -34,6 +86,7 @@ import {
   ListTapTuningPresets,
   PairDevice,
   PreviewTapTuningSettings,
+  ResetFacetConfiguration,
   SaveDeviceName,
   SaveFacetAssignment,
   SaveLEDSettings,
@@ -49,15 +102,78 @@ import { byteValue, configToSettings, defaultLEDSettings, defaultSettings, defau
 import './styles.css';
 
 const emptyState = { config: {}, devices: [], states: [], tapSettings: [], tapTuningStates: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
-const defaultTask = { mode: 'task', id: '', label: '', icon: 'tag', color: '#69d2a5', pomodoroLimitMinutes: 25 };
+const defaultTask = { mode: 'task', id: '', label: '', icon: 'hard-hat', color: '#69d2a5', pomodoroLimitMinutes: 25 };
 const defaultPair = { deviceID: '', password: '000000', newPassword: '', allowOSPairing: true };
 const defaultPassword = { currentPassword: '', newPassword: '', confirmPassword: '' };
 const defaultUnpair = { factoryReset: false, allowOSUnpairing: true };
+const stickerIconOptions = [
+  { value: 'hard-hat', label: 'Project', icon: HardHat },
+  { value: 'briefcase', label: 'Office', icon: BriefcaseBusiness },
+  { value: 'handshake', label: 'Client', icon: Handshake },
+  { value: 'zap', label: 'Urgent', icon: Zap },
+  { value: 'mail-open', label: 'Emails', icon: MailOpen },
+  { value: 'phone', label: 'Calls', icon: Phone },
+  { value: 'lightbulb', label: 'Brainstorm', icon: Lightbulb },
+  { value: 'users-round', label: 'Meeting', icon: UsersRound },
+  { value: 'chart-pie', label: 'Report', icon: ChartPie },
+  { value: 'repeat-2', label: 'Agile', icon: Repeat2 },
+  { value: 'circle-dollar-sign', label: 'Finances', icon: CircleDollarSign },
+  { value: 'truck', label: 'Logistics', icon: Truck },
+  { value: 'key', label: 'Admin', icon: Key },
+  { value: 'code-xml', label: 'Code', icon: CodeXml },
+  { value: 'bug', label: 'Debug', icon: Bug },
+  { value: 'cog', label: 'Test', icon: Cog },
+  { value: 'ux', label: 'UX', icon: UXIcon },
+  { value: 'palette', label: 'Design', icon: Palette },
+  { value: 'pen-tool', label: 'Write', icon: PenTool },
+  { value: 'pencil', label: 'Edit', icon: Pencil },
+  { value: 'shopping-cart', label: 'Sales', icon: ShoppingCart },
+  { value: 'megaphone', label: 'Marketing', icon: Megaphone },
+  { value: 'puzzle', label: 'Consult', icon: Puzzle },
+  { value: 'mic-vocal', label: 'Media', icon: MicVocal },
+  { value: 'graduation-cap', label: 'Study', icon: GraduationCap },
+  { value: 'book-marked', label: 'Read', icon: BookMarked },
+  { value: 'dumbbell', label: 'Fitness', icon: Dumbbell },
+  { value: 'camera', label: 'Camera', icon: Camera },
+  { value: 'gamepad-2', label: 'Games', icon: Gamepad2 },
+  { value: 'music-2', label: 'Music', icon: Music2 },
+  { value: 'tv', label: 'TV', icon: Tv },
+  { value: 'coffee', label: 'Break', icon: Coffee },
+  { value: 'facebook', label: 'Facebook', icon: Facebook },
+  { value: 'instagram', label: 'Instagram', icon: Instagram },
+  { value: 'youtube', label: 'Youtube', icon: Youtube },
+  { value: 'twitter', label: 'Twitter', icon: Twitter },
+  { value: 'headset', label: 'Support', icon: Headset },
+  { value: 'quotation', label: 'Quotation', icon: QuotationIcon },
+  { value: 'file', label: 'Document', icon: File },
+  { value: 'chart-no-axes-combined', label: 'Presentation', icon: ChartNoAxesCombined },
+  { value: 'globe-2', label: 'Web', icon: Globe2 },
+  { value: 'messages-square', label: 'Chat', icon: MessagesSquare },
+];
+const legacyIconAliases = {
+  tag: Tag,
+  list: List,
+  code: Code2,
+  file: File,
+  'file-search': FileSearch,
+  search: Search,
+  calendar: CalendarCheck,
+  home: Home,
+  pause: Pause,
+  layers: Layers,
+};
+const customIconOptions = [
+  ...Object.entries(legacyIconAliases)
+    .filter(([value]) => !stickerIconOptions.some((option) => option.value === value))
+    .map(([value, icon]) => ({ value, label: humaniseIconName(value), icon })),
+].sort((left, right) => left.label.localeCompare(right.label));
+const facetColorOptions = ['#69d2a5', '#b83220', '#7ccba2', '#8d2fb7', '#f4b79a', '#fff7a8', '#48a4cf', '#d96f93', '#153f8a', '#f47422', '#fff36a', '#9b7cf2'];
 function App() {
   const [state, setState] = useState(emptyState);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
+  const [currentPage, setCurrentPage] = useState('track');
   const [selectedDevice, setSelectedDevice] = useState('');
   const [selectedFacet, setSelectedFacet] = useState(1);
   const [discovered, setDiscovered] = useState([]);
@@ -72,6 +188,7 @@ function App() {
   const [ledForm, setLEDForm] = useState(defaultLEDSettings);
   const [deviceNameForm, setDeviceNameForm] = useState('');
   const [workflow, setWorkflow] = useState(null);
+  const [pendingClearFacet, setPendingClearFacet] = useState(null);
   const [now, setNow] = useState(Date.now());
   const refreshVersion = useRef(0);
 
@@ -88,7 +205,7 @@ function App() {
       if (current && nextState.devices?.some((device) => device.id === current)) {
         return current;
       }
-      return nextState.devices?.[0]?.id || '';
+      return nextState.devices?.find(isPairedDevice)?.id || nextState.devices?.[0]?.id || '';
     });
     setSettingsForm(configToSettings(nextState.config));
     setError('');
@@ -146,6 +263,8 @@ function App() {
       'devices.scanned',
       'device.pairing',
       'device.facet.saved',
+      'device.facet.cleared',
+      'device.facets.reset',
       'device.profile.saved',
       'device.tap.saved',
       'device.led.saved',
@@ -187,6 +306,8 @@ function App() {
     && (!activeState?.deviceID || currentSession.deviceID === activeState.deviceID)
     && (!activeState?.currentFacetKnown || currentSession.facet === activeState.currentFacet);
   const activeTaskName = taskNameFromActiveState(activeState, activeFacetConfig, currentSessionMatchesState ? currentSession : null);
+  const activeTaskIcon = activeFacetConfig?.icon || currentSession?.taskIconSnapshot || (activeState?.paused ? 'pause' : defaultTask.icon);
+  const activeTaskColor = activeFacetConfig?.color || currentSession?.taskColorSnapshot || '#d8dee9';
   const activeFacetLabel = activeState?.currentFacetKnown && !activeState.currentFacetUndefined
     ? `Facet ${activeState.currentFacet}`
     : 'facet unknown';
@@ -196,6 +317,9 @@ function App() {
     : 'No device connected · task unknown';
   const taskChoices = useMemo(() => dedupeTasks(state.tasks, taskForm.id), [state.tasks, taskForm.id]);
   const selectedFacetConfig = state.facetConfigs?.find((item) => item.deviceID === selectedDevice && item.facet === selectedFacet);
+  const liveFacet = activeState?.deviceID === selectedDevice && activeState?.currentFacetKnown && !activeState?.currentFacetUndefined
+    ? activeState.currentFacet
+    : 0;
   const selectedTapSettings = state.tapSettings?.find((item) => item.deviceID === selectedDevice);
   const selectedTapTuning = state.tapTuningStates?.find((item) => item.deviceID === selectedDevice);
   const selectedTapStatus = tapTuningStatus(selectedTapTuning, selectedTapSettings);
@@ -203,12 +327,37 @@ function App() {
   const selectedDeviceConnected = activeState?.deviceID === selectedDevice && activeState?.connectionState === 'connected';
   const selectedFacetSavedLabel = selectedFacetLabel(selectedFacetConfig, selectedFacet);
   const selectedFacetSavedKind = facetKindLabel(selectedFacetConfig);
+  const clearFacetKey = `${selectedDevice}:${selectedFacet}`;
+  const clearFacetArmed = pendingClearFacet === clearFacetKey;
+  const pairedDevices = useMemo(() => state.devices?.filter(isPairedDevice) || [], [state.devices]);
+  const hasPairedDevice = pairedDevices.length > 0;
+  const visiblePage = hasPairedDevice ? currentPage : 'device';
+  const hasKnownDevice = Boolean(state.devices?.length);
+  const hasConfiguredFacets = Boolean(state.facetConfigs?.some((item) => item.deviceID === selectedDevice && (item.taskID || item.isPauseAssignment)));
+  const hasSessions = Boolean(state.sessions?.length);
+  const currentSessionLabel = currentSession ? sessionDurationLabel(currentSession, now) : 'No running session';
+  const currentPausedLabel = currentSession ? sessionPausedLabel(currentSession, now, activeState) : '0 sec';
+  const taskFormUsesCustomIcon = isCustomTaskIcon(taskForm.icon);
 
   useEffect(() => {
     if (selectedDevice) {
       setPairForm((current) => ({ ...current, deviceID: current.deviceID || selectedDevice }));
     }
   }, [selectedDevice]);
+
+  useEffect(() => {
+    setPendingClearFacet(null);
+  }, [selectedDevice, selectedFacet]);
+
+  useEffect(() => {
+    if (!pendingClearFacet) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      setPendingClearFacet((current) => (current === pendingClearFacet ? null : current));
+    }, 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingClearFacet]);
 
   useEffect(() => {
     setDeviceNameForm(selectedDeviceView?.displayName || '');
@@ -293,6 +442,7 @@ function App() {
       setPasswordForm(defaultPassword);
       setPairForm((current) => ({ ...current, password: '', newPassword: '' }));
       setSelectedDevice(req.deviceID);
+      setCurrentPage(result.completed ? 'facets' : 'device');
     }
   }
 
@@ -369,7 +519,7 @@ function App() {
         facet: selectedFacet,
         taskID: taskForm.mode === 'pause' ? '' : taskForm.id,
         label,
-        icon: taskForm.icon || task?.icon || existing.icon || 'tag',
+        icon: taskForm.icon || task?.icon || existing.icon || defaultTask.icon,
         color: taskForm.color || task?.color || existing.color || '#69d2a5',
         isPauseAssignment: taskForm.mode === 'pause',
         isPomodoroAssignment: taskForm.mode === 'pomodoro',
@@ -379,6 +529,51 @@ function App() {
     );
     if (saved) {
       setFacetDirty(false);
+    }
+  }
+
+  async function resetAllFacets() {
+    if (!selectedDevice) {
+      setError('Select a device before resetting facets.');
+      return;
+    }
+    if (!window.confirm('Reset all facet assignments for this device? Existing tasks and session history will stay intact.')) {
+      return;
+    }
+    const reset = await runAction(
+      'resetFacets',
+      () => ResetFacetConfiguration(selectedDevice),
+      'Facet configuration reset',
+    );
+    if (reset) {
+      setState((current) => replaceFacetConfigsForDevice(current, selectedDevice, reset));
+      setSelectedFacet(1);
+      setFacetDirty(false);
+      setTaskForm(taskFormFromFacet(null, 1));
+    }
+  }
+
+  async function clearFacet() {
+    if (!selectedDevice) {
+      setError('Select a device before clearing a facet.');
+      return;
+    }
+    if (!clearFacetArmed) {
+      setPendingClearFacet(clearFacetKey);
+      setError('');
+      setNotice(`Click Clear Facet again to clear Facet ${selectedFacet}. Existing tasks and session history will stay intact.`);
+      return;
+    }
+    setPendingClearFacet(null);
+    const cleared = await runAction(
+      'clearFacet',
+      () => ClearFacetConfiguration(selectedDevice, selectedFacet),
+      `Facet ${selectedFacet} cleared`,
+    );
+    if (cleared) {
+      setState((current) => upsertFacetConfig(current, { ...cleared, deviceID: selectedDevice, facet: selectedFacet }));
+      setFacetDirty(false);
+      setTaskForm(taskFormFromFacet(null, selectedFacet));
     }
   }
 
@@ -509,7 +704,7 @@ function App() {
         ...current,
         mode,
         label: current.mode === 'pause' ? '' : current.label,
-        icon: current.mode === 'pause' ? 'tag' : current.icon,
+        icon: current.mode === 'pause' ? defaultTask.icon : current.icon,
         color: current.mode === 'pause' ? '#69d2a5' : current.color,
         pomodoroLimitMinutes: current.pomodoroLimitMinutes || 25,
       }));
@@ -522,7 +717,7 @@ function App() {
     setTaskForm((current) => (
       task
         ? { ...current, id: task.id, label: task.label, icon: task.icon, color: task.color }
-        : { ...current, id: '', label: '', icon: 'tag', color: '#69d2a5' }
+        : { ...current, id: '', label: '', icon: defaultTask.icon, color: '#69d2a5' }
     ));
     setFacetDirty(true);
   }
@@ -541,7 +736,7 @@ function App() {
     <main className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="mark">T</div>
+          <div className="mark" aria-hidden="true"><SandtimerLogo /></div>
           <div>
             <h1>TimeFlip</h1>
             <p>Local desktop tracking</p>
@@ -550,26 +745,64 @@ function App() {
         <button className="primary" disabled={busy === 'refresh'} onClick={() => runAction('refresh', refresh, 'State refreshed')}>
           <RefreshCw size={16} /> Refresh
         </button>
-        <nav>
-          <a href="#dashboard"><Clock3 size={17} /> Dashboard</a>
-          <a href="#devices"><Bluetooth size={17} /> Devices</a>
-          <a href="#facets"><SlidersHorizontal size={17} /> Facets</a>
-          <a href="#history"><History size={17} /> History</a>
-          <a href="#settings"><Settings size={17} /> Settings</a>
+        <nav aria-label="Primary">
+          {hasPairedDevice ? (
+            <>
+              <NavButton page="track" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<Clock3 size={17} />}>Track</NavButton>
+              <NavButton page="facets" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<SlidersHorizontal size={17} />}>Facets</NavButton>
+              <NavButton page="config" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<Settings size={17} />}>Device config</NavButton>
+              <NavButton page="device" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<Bluetooth size={17} />}>Device management</NavButton>
+            </>
+          ) : (
+            <NavButton page="device" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<Bluetooth size={17} />}>Pair device</NavButton>
+          )}
         </nav>
+        <a className="navButton sidebarBugLink" href="https://github.com/mitchellrj/timeflip-desktop/issues/new" target="_blank" rel="noreferrer">
+          <Bug size={17} /> Report a bug
+        </a>
       </aside>
 
       <section className="content">
-        {error && <div className="notice error">{error}</div>}
-        {notice && <div className="notice success">{notice}</div>}
+        {error && (
+          <DismissibleNotice kind="error" onDismiss={() => setError('')}>
+            {error}
+          </DismissibleNotice>
+        )}
+        {notice && (
+          <DismissibleNotice kind="success" onDismiss={() => setNotice('')}>
+            {notice}
+          </DismissibleNotice>
+        )}
 
+        {visiblePage === 'track' && (
         <section id="dashboard" className="band dashboard">
-          <div>
-            <span className="eyebrow">Current state</span>
-            <h2>{activeTaskName}</h2>
-            <p>{activeStatusLabel}</p>
+          <div className="currentState">
+            <IconBadge name={activeTaskIcon} color={activeTaskColor} size={24} />
+            <div>
+              <span className="eyebrow">Now tracking</span>
+              <h2>{activeTaskName}</h2>
+              <p>{activeStatusLabel}</p>
+            </div>
+            <div className="statusChips" aria-label="Tracking status">
+              <span className={`chip ${selectedDeviceConnected ? 'good' : 'muted'}`}>
+                <Activity size={14} /> {selectedDeviceConnected ? 'Connected' : 'Not connected'}
+              </span>
+              <span className="chip"><Clock3 size={14} /> {currentSessionLabel}</span>
+              <span className="chip"><Pause size={14} /> Paused {currentPausedLabel}</span>
+              <span className="chip"><BatteryFull size={14} /> {activeState?.batteryPercent ? `${activeState.batteryPercent}%` : 'Battery unknown'}</span>
+            </div>
           </div>
           <div className="dashboardActions">
+            {!hasKnownDevice && (
+              <button className="primary wideAction" disabled={busy === 'scan'} onClick={scanDevices}>
+                <Search size={17} /> Find TimeFlip
+              </button>
+            )}
+            {hasKnownDevice && !selectedDeviceConnected && (
+              <button className="primary wideAction" disabled={!selectedDevice || busy === 'connect'} onClick={() => runAction('connect', () => ConnectDevice(selectedDevice), 'Connect requested')}>
+                <Plug size={17} /> Connect
+              </button>
+            )}
             <button
               className="iconButton"
               disabled={!selectedDevice || busy === 'lock'}
@@ -588,11 +821,13 @@ function App() {
             </button>
           </div>
         </section>
+        )}
 
+        {visiblePage === 'device' && (
         <section id="devices" className="grid two">
-          <Panel title="Devices" icon={<Bluetooth size={18} />}>
+          <Panel title="Devices" icon={<Bluetooth size={18} />} description="Scan when setting up, then use this list to reconnect or switch devices later.">
             <div className="toolbar">
-              <button disabled={busy === 'scan'} onClick={scanDevices}><RefreshCw size={16} /> Scan</button>
+              <button disabled={busy === 'scan'} onClick={scanDevices}><Search size={16} /> Scan</button>
               <button disabled={!selectedDevice || busy === 'connect'} onClick={() => runAction('connect', () => ConnectDevice(selectedDevice), 'Connect requested')}><Plug size={16} /> Connect</button>
               <button disabled={!selectedDevice || busy === 'disconnect'} onClick={() => runAction('disconnect', () => DisconnectDevice(selectedDevice), 'Disconnected')}><Unplug size={16} /> Disconnect</button>
             </div>
@@ -603,11 +838,17 @@ function App() {
                   <small>{device.hasPassword ? 'password stored' : device.pairingState || 'known'}</small>
                 </button>
               ))}
+              {discovered.filter((device) => !state.devices?.some((known) => known.id === device.id)).map((device) => (
+                <button key={device.id} className={`row discovery ${pairForm.deviceID === device.id ? 'selected' : ''}`} onClick={() => setPairForm((current) => ({ ...current, deviceID: device.id }))}>
+                  <span>{device.name || 'Nearby TimeFlip'}</span>
+                  <small>ready to pair</small>
+                </button>
+              ))}
               {state.devices?.length === 0 && <p className="empty">No known devices yet.</p>}
             </div>
           </Panel>
 
-          <Panel title="Pairing" icon={<ShieldCheck size={18} />}>
+          <Panel title="Pairing" icon={<ShieldCheck size={18} />} description="Use the factory password for first pairing. Set a new password only when you want to change it on the device.">
             <form className="form" onSubmit={pairDevice}>
               <label>
                 Device
@@ -627,7 +868,7 @@ function App() {
                   <input type="password" value={pairForm.password} onChange={(event) => setPairForm({ ...pairForm, password: event.target.value })} autoComplete="current-password" />
                 </label>
                 <label>
-                  New password
+                  New password, optional
                   <input type="password" value={pairForm.newPassword} onChange={(event) => setPairForm({ ...pairForm, newPassword: event.target.value })} autoComplete="new-password" />
                 </label>
               </div>
@@ -639,9 +880,11 @@ function App() {
             </form>
           </Panel>
         </section>
+        )}
 
+        {visiblePage === 'config' && (
         <section className="grid two">
-          <Panel title="Status" icon={<Tag size={18} />}>
+          <Panel title="Device details" icon={<Tag size={18} />} description="Rename the device for this app and check live hardware state before tuning.">
             <dl className="facts">
               <dt>Device</dt><dd>{selectedDeviceView?.displayName || selectedDevice || 'none'}</dd>
               <dt>Connection</dt><dd>{activeState?.connectionState || 'none'}</dd>
@@ -652,14 +895,14 @@ function App() {
             </dl>
             <form className="form" onSubmit={saveDeviceName}>
               <label>
-                Device name
+                Local device name
                 <input maxLength={18} value={deviceNameForm} onChange={(event) => setDeviceNameForm(event.target.value)} placeholder="TimeFlip2" />
               </label>
-              <button disabled={!selectedDevice || busy === 'deviceName'}><Save size={16} /> Save Device Name</button>
+              <button disabled={!selectedDevice || busy === 'deviceName'}><Save size={16} /> Save Name</button>
             </form>
 	          </Panel>
 
-	          <Panel title="Tap Settings" icon={<SlidersHorizontal size={18} />}>
+	          <Panel title="Tap tuning" icon={<SlidersHorizontal size={18} />} description="Choose a feel, preview it on the connected device, then save when taps feel reliable.">
 	            <form className="form" onSubmit={saveTapSettings}>
 	              <dl className="facts compact">
 	                <dt>Status</dt><dd>{selectedTapStatus}</dd>
@@ -675,80 +918,99 @@ function App() {
 	                ))}
 	              </div>
 	              <div className="tapControlGrid">
-	                <TapByteField label="Threshold" unit="register value" value={tapForm.threshold} onChange={(value) => updateTapForm('threshold', value)} />
-	                <TapByteField label="Limit" unit="register ticks" value={tapForm.limit} onChange={(value) => updateTapForm('limit', value)} />
-	                <TapByteField label="Latency" unit="register ticks" value={tapForm.latency} onChange={(value) => updateTapForm('latency', value)} />
-	                <TapByteField label="Window" unit="register ticks" value={tapForm.window} onChange={(value) => updateTapForm('window', value)} />
+	                <TapByteField label="Tap force threshold" unit="lower is more sensitive" value={tapForm.threshold} onChange={(value) => updateTapForm('threshold', value)} />
+	                <TapByteField label="Repeat limit" unit="register ticks" value={tapForm.limit} onChange={(value) => updateTapForm('limit', value)} />
+	                <TapByteField label="Debounce latency" unit="register ticks" value={tapForm.latency} onChange={(value) => updateTapForm('latency', value)} />
+	                <TapByteField label="Detection window" unit="register ticks" value={tapForm.window} onChange={(value) => updateTapForm('window', value)} />
 	              </div>
 	              <div className="toolbar">
-	                <button type="button" disabled={!selectedDevice || !selectedDeviceConnected || selectedTapTuning?.active || busy === 'tapTuningStart'} onClick={beginTapTuning}><Play size={16} /> Start</button>
-	                <button type="button" disabled={!selectedDevice || !selectedTapTuning?.active || !selectedDeviceConnected || busy === 'tapTuningPreview'} onClick={previewTapTuning}><Check size={16} /> Apply</button>
+	                <button type="button" disabled={!selectedDevice || !selectedDeviceConnected || selectedTapTuning?.active || busy === 'tapTuningStart'} onClick={beginTapTuning}><Play size={16} /> Start preview</button>
+	                <button type="button" disabled={!selectedDevice || !selectedTapTuning?.active || !selectedDeviceConnected || busy === 'tapTuningPreview'} onClick={previewTapTuning}><Check size={16} /> Apply temporary</button>
 	                <button type="button" disabled={!selectedDevice || busy === 'tapReset'} onClick={resetTapForm}><RotateCcw size={16} /> Reset</button>
 	                <button type="button" disabled={!selectedDevice || !selectedTapTuning?.active || busy === 'tapTuningCancel'} onClick={cancelTapTuning}><X size={16} /> Cancel</button>
-	                <button className="primary" disabled={!selectedDevice || busy === 'tapSettings'}><Save size={16} /> Save</button>
+	                <button className="primary" disabled={!selectedDevice || busy === 'tapSettings'}><Save size={16} /> Save Tap Feel</button>
 	              </div>
 	            </form>
 	          </Panel>
 
-	          <Panel title="LED Settings" icon={<SlidersHorizontal size={18} />}>
+	          <Panel title="LED feedback" icon={<Palette size={18} />} description="Set the device light brightness and blink length used for confirmations.">
 	            <form className="form" onSubmit={saveLEDSettings}>
 	              <dl className="facts compact">
 	                <dt>Status</dt><dd>{selectedLEDSettings?.confirmedOnDevice ? 'confirmed on device' : selectedLEDSettings ? 'saved locally' : 'defaults'}</dd>
 	              </dl>
-	              <div className="formGrid">
-	                <ByteField label="Brightness" min={1} max={100} unit="percent, 1-100" value={ledForm.brightnessPercent} onChange={(value) => updateLEDForm('brightnessPercent', value)} />
-	                <ByteField label="Blink" min={5} max={60} unit="seconds, 5-60" value={ledForm.blinkSeconds} onChange={(value) => updateLEDForm('blinkSeconds', value)} />
+	              <div className="tapControlGrid">
+	                <RangeNumberField label="Brightness" min={1} max={100} unit="percent" value={ledForm.brightnessPercent} onChange={(value) => updateLEDForm('brightnessPercent', value)} />
+	                <RangeNumberField label="Blink length" min={5} max={60} unit="seconds" value={ledForm.blinkSeconds} onChange={(value) => updateLEDForm('blinkSeconds', value)} />
 	              </div>
-	              <button className="primary" disabled={!selectedDevice || busy === 'ledSettings'}><Save size={16} /> Save LED Settings</button>
+              <button className="primary" disabled={!selectedDevice || busy === 'ledSettings'}><Save size={16} /> Save LED Feedback</button>
 	            </form>
 	          </Panel>
-
-	          <Panel title="Password" icon={<KeyRound size={18} />}>
-            <form className="form" onSubmit={updatePassword}>
-              <p className="helper">Stored passwords are never displayed. Enter the current value only when changing it.</p>
-              <label>
-                Current password
-                <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} autoComplete="current-password" />
-              </label>
-              <div className="formGrid">
-                <label>
-                  New password
-                  <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} autoComplete="new-password" />
-                </label>
-                <label>
-                  Confirm
-                  <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} autoComplete="new-password" />
-                </label>
-              </div>
-              <button disabled={!selectedDevice || busy === 'password'}><KeyRound size={16} /> Update</button>
-            </form>
-            <form className="form dangerZone" onSubmit={unpairDevice}>
-              <div className="formGrid">
-                <label className="check"><input type="checkbox" checked={unpairForm.factoryReset} onChange={(event) => setUnpairForm({ ...unpairForm, factoryReset: event.target.checked })} /> Factory reset</label>
-                <label className="check"><input type="checkbox" checked={unpairForm.allowOSUnpairing} onChange={(event) => setUnpairForm({ ...unpairForm, allowOSUnpairing: event.target.checked })} /> OS unpairing</label>
-              </div>
-              <button className="danger" disabled={!selectedDevice || busy === 'unpair'}><Trash2 size={16} /> Unpair</button>
-            </form>
-          </Panel>
         </section>
+        )}
 
-        {workflow && <WorkflowStatus workflow={workflow} />}
+        {visiblePage === 'device' && hasPairedDevice && (
+          <section className="grid two">
+            <Panel title="Advanced device controls" icon={<KeyRound size={18} />} description="Password changes, OS unpairing, and factory reset are rare maintenance actions.">
+              <details className="advancedPanel">
+                <summary><KeyRound size={16} /> Change password</summary>
+                <form className="form" onSubmit={updatePassword}>
+                  <p className="helper">Stored passwords are never displayed. Enter the current value only when changing it.</p>
+                  <label>
+                    Current password
+                    <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} autoComplete="current-password" />
+                  </label>
+                  <div className="formGrid">
+                    <label>
+                      New password
+                      <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} autoComplete="new-password" />
+                    </label>
+                    <label>
+                      Confirm
+                      <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} autoComplete="new-password" />
+                    </label>
+                  </div>
+                  <button disabled={!selectedDevice || busy === 'password'}><KeyRound size={16} /> Update</button>
+                </form>
+              </details>
+              <details className="advancedPanel dangerZone">
+                <summary><Trash2 size={16} /> Unpair or reset</summary>
+                <form className="form" onSubmit={unpairDevice}>
+                  <p className="helper">Unpairing removes the local relationship with this app. Factory reset also asks the device to clear its own pairing state.</p>
+                  <div className="formGrid">
+                    <label className="check"><input type="checkbox" checked={unpairForm.factoryReset} onChange={(event) => setUnpairForm({ ...unpairForm, factoryReset: event.target.checked })} /> Factory reset</label>
+                    <label className="check"><input type="checkbox" checked={unpairForm.allowOSUnpairing} onChange={(event) => setUnpairForm({ ...unpairForm, allowOSUnpairing: event.target.checked })} /> Remove from OS Bluetooth list</label>
+                  </div>
+                  <button className="danger" disabled={!selectedDevice || busy === 'unpair'}><Trash2 size={16} /> Unpair</button>
+                </form>
+              </details>
+            </Panel>
+          </section>
+        )}
 
+        {visiblePage === 'device' && workflow && <WorkflowStatus workflow={workflow} />}
+
+        {visiblePage === 'facets' && (
         <section id="facets" className="band">
           <div className="sectionTitle">
             <h2><SlidersHorizontal size={20} /> Facets</h2>
-            <p>Labels and icons stay local. Colours are confirmed on device when connected.</p>
+            <div className="sectionActions">
+              <p>Give each physical side a task, colour, and icon so routine tracking is glanceable.</p>
+              <button type="button" className="danger" disabled={!selectedDevice || busy === 'resetFacets'} onClick={resetAllFacets}>
+                <RotateCcw size={16} /> Reset All Facets
+              </button>
+            </div>
           </div>
           <div className="facetLayout">
             <div className="facetGrid">
               {Array.from({ length: 12 }, (_, index) => {
                 const facet = index + 1;
-                const cfg = state.facetConfigs?.find((item) => item.facet === facet);
+                const cfg = state.facetConfigs?.find((item) => item.deviceID === selectedDevice && item.facet === facet);
+                const isLiveFacet = liveFacet === facet;
                 return (
-                  <button className={`facet ${selectedFacet === facet ? 'selected' : ''}`} key={facet} onClick={() => setSelectedFacet(facet)}>
+                  <button className={`facet ${selectedFacet === facet ? 'selected' : ''} ${isLiveFacet ? 'current' : ''}`} key={facet} onClick={() => setSelectedFacet(facet)}>
                     <span className="swatch" style={{ background: cfg?.color || '#d8dee9' }} />
-                    <strong>{cfg?.label || `Facet ${facet}`}</strong>
-                    <small>{facetTileKind(cfg)}</small>
+                    <strong><IconGlyph name={cfg?.icon} size={16} /> <span>{cfg?.label || `Facet ${facet}`}</span></strong>
+                    <small>{facetTileKind(cfg)}{isLiveFacet ? <span className="currentFacetBadge">Current</span> : null}</small>
                   </button>
                 );
               })}
@@ -764,18 +1026,18 @@ function App() {
               <div className="savedFacet">
                 <span className="swatch" style={{ background: selectedFacetConfig?.color || '#d8dee9' }} />
                 <div>
-                  <strong>{selectedFacetSavedLabel}</strong>
+                  <strong><IconGlyph name={selectedFacetConfig?.icon} size={16} /> <span>{selectedFacetSavedLabel}</span></strong>
                   <small>{selectedFacetSavedKind}{selectedFacetConfig?.assignedOnDevice ? ' · confirmed on device' : ''}</small>
                 </div>
               </div>
-              <label>
-                Facet type
-                <select value={taskForm.mode} onChange={(event) => chooseFacetMode(event.target.value)}>
-                  <option value="task">Task</option>
-                  <option value="pomodoro">Pomodoro</option>
-                  <option value="pause">Pause side</option>
-                </select>
-              </label>
+              <div className="fieldGroup">
+                <span className="fieldTitle">Facet type</span>
+                <div className="segmented" role="group" aria-label="Facet type">
+                  <button type="button" className={taskForm.mode === 'task' ? 'selected' : ''} onClick={() => chooseFacetMode('task')}><BriefcaseBusiness size={16} /> Task</button>
+                  <button type="button" className={taskForm.mode === 'pomodoro' ? 'selected' : ''} onClick={() => chooseFacetMode('pomodoro')}><Clock3 size={16} /> Pomodoro</button>
+                  <button type="button" className={taskForm.mode === 'pause' ? 'selected' : ''} onClick={() => chooseFacetMode('pause')}><Pause size={16} /> Pause</button>
+                </div>
+              </div>
               <label>
                 Assign task
                 <select value={taskForm.id} disabled={taskForm.mode === 'pause'} onChange={(event) => chooseTask(event.target.value)}>
@@ -791,15 +1053,40 @@ function App() {
                   Label
                   <input value={taskForm.label} onChange={(event) => updateFacetForm({ label: event.target.value })} placeholder={selectedFacetConfig?.label || `Facet ${selectedFacet}`} />
                 </label>
-                <label>
-                  Icon
-                  <input value={taskForm.icon} onChange={(event) => updateFacetForm({ icon: event.target.value })} placeholder="tag" />
-                </label>
               </div>
-              <label>
-                Colour
-                <input type="color" value={taskForm.color} onChange={(event) => updateFacetForm({ color: event.target.value })} />
-              </label>
+              <div className="fieldGroup">
+                <span className="fieldTitle">Icon</span>
+                <IconDropdown
+                  options={stickerIconOptions}
+                  value={taskFormUsesCustomIcon ? 'custom' : taskForm.icon}
+                  customOption={taskFormUsesCustomIcon ? { value: 'custom', label: 'Custom', icon: resolveIconComponent(taskForm.icon) } : { value: 'custom', label: 'Custom', icon: Palette }}
+                  onChange={(value) => updateFacetForm({ icon: value === 'custom' ? customIconOptions[0]?.value || defaultTask.icon : value })}
+                />
+              </div>
+              {taskFormUsesCustomIcon && (
+                <div className="fieldGroup">
+                  <span className="fieldTitle">Custom icon</span>
+                  <IconDropdown options={customIconOptions} value={taskForm.icon} onChange={(value) => updateFacetForm({ icon: value })} />
+                </div>
+              )}
+              <div className="fieldGroup">
+                <span className="fieldTitle">Colour</span>
+                <div className="colorPickerRow">
+                  <input type="color" value={taskForm.color} onChange={(event) => updateFacetForm({ color: event.target.value })} aria-label="Facet colour" />
+                  <div className="colorChoices" aria-label="Suggested facet colours">
+                    {facetColorOptions.map((color) => (
+                      <button
+                        type="button"
+                        className={`colorChoice ${normaliseColor(taskForm.color, '') === color ? 'selected' : ''}`}
+                        key={color}
+                        onClick={() => updateFacetForm({ color })}
+                        style={{ background: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
               <NumberField
                 label="Pomodoro"
                 unit="minutes"
@@ -811,22 +1098,32 @@ function App() {
               />
               <div className="toolbar">
                 <button type="button" disabled={!facetDirty} onClick={resetFacetForm}>Reset</button>
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={!selectedDevice || busy === 'clearFacet'}
+                  onClick={clearFacet}
+                >
+                  <Trash2 size={16} /> {clearFacetArmed ? `Confirm Clear Facet ${selectedFacet}` : 'Clear Facet'}
+                </button>
                 <button type="button" disabled={taskForm.mode === 'pause' || busy === 'task'} onClick={saveTask}><Plus size={16} /> Save Task</button>
                 <button className="primary" disabled={!selectedDevice || busy === 'facet'}><Save size={16} /> Save Facet {selectedFacet}</button>
               </div>
             </form>
           </div>
         </section>
+        )}
 
+        {visiblePage === 'track' && (
         <section id="history" className="band">
           <div className="sectionTitle">
             <h2><History size={20} /> Task Sessions</h2>
-            <p>Summary reporting comes later; this view starts with reliable sessions.</p>
+            <p>Recent local sessions, with paused time separated from elapsed time.</p>
           </div>
           <div className="sessionList">
             {state.sessions?.slice(0, 12).map((session) => (
               <div className="session" key={session.id}>
-                <span className="swatch" style={{ background: session.taskColorSnapshot || '#d8dee9' }} />
+                <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
                 <strong>{sessionTaskName(session, state.tasks)}</strong>
                 <dl className="sessionMeta">
                   <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
@@ -840,34 +1137,71 @@ function App() {
             {state.sessions?.length === 0 && <p className="empty">No task sessions recorded yet.</p>}
           </div>
         </section>
+        )}
 
+        {visiblePage === 'config' && (
         <section id="settings" className="band">
           <div className="sectionTitle">
             <h2><Settings size={20} /> Settings</h2>
-            <p>{state.config?.databasePath || 'Local app config'}</p>
+            <p>Advanced reconnect policy and local storage details.</p>
           </div>
-          <form className="settingsGrid" onSubmit={saveSettings}>
-            <NumberField label="Communication timeout" value={settingsForm.communicationTimeoutSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, communicationTimeoutSeconds: value })} />
-            <NumberField label="Command timeout" value={settingsForm.commandTimeoutSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, commandTimeoutSeconds: value })} />
-            <NumberField label="Initial retry" value={settingsForm.initialRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, initialRetrySeconds: value })} />
-            <NumberField label="Medium retry" value={settingsForm.mediumRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, mediumRetrySeconds: value })} />
-            <NumberField label="Long retry" value={settingsForm.longRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, longRetrySeconds: value })} />
-            <NumberField label="Offline after" value={settingsForm.offlineAfterSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterSeconds: value })} />
-            <NumberField label="Failure threshold" value={settingsForm.offlineAfterFailures} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterFailures: value })} />
-            <button className="primary" disabled={busy === 'settings'}><Save size={16} /> Save Settings</button>
-          </form>
+          <p className="storagePath">{state.config?.databasePath || 'Local app config'}</p>
+          <details className="advancedPanel" open>
+            <summary><Settings size={16} /> Reconnect timing</summary>
+            <form className="settingsGrid" onSubmit={saveSettings}>
+              <NumberField label="Communication timeout" unit="seconds" value={settingsForm.communicationTimeoutSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, communicationTimeoutSeconds: value })} />
+              <NumberField label="Command timeout" unit="seconds" value={settingsForm.commandTimeoutSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, commandTimeoutSeconds: value })} />
+              <NumberField label="Initial retry" unit="seconds" value={settingsForm.initialRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, initialRetrySeconds: value })} />
+              <NumberField label="Medium retry" unit="seconds" value={settingsForm.mediumRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, mediumRetrySeconds: value })} />
+              <NumberField label="Long retry" unit="seconds" value={settingsForm.longRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, longRetrySeconds: value })} />
+              <NumberField label="Mark offline after" unit="seconds" value={settingsForm.offlineAfterSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterSeconds: value })} />
+              <NumberField label="Failure threshold" unit="failures" value={settingsForm.offlineAfterFailures} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterFailures: value })} />
+              <button className="primary" disabled={busy === 'settings'}><Save size={16} /> Save Settings</button>
+            </form>
+          </details>
         </section>
+        )}
       </section>
     </main>
   );
 }
 
-function Panel({ title, icon, children }) {
+function Panel({ title, icon, description = '', children }) {
   return (
     <section className="panel">
       <h2>{icon}{title}</h2>
+      {description ? <p className="panelIntro">{description}</p> : null}
       {children}
     </section>
+  );
+}
+
+function SandtimerLogo() {
+  return (
+    <svg viewBox="0 0 64 64" focusable="false">
+      <rect x="5" y="5" width="54" height="54" rx="14" />
+      <path className="sand" d="M23 22h18L32 32zM24 44h16l-8-10z" />
+      <path d="M21 18h22M21 46h22M22 19l10 13M42 19L32 32M32 32L22 45M32 32l10 13" />
+    </svg>
+  );
+}
+
+function DismissibleNotice({ kind, onDismiss, children }) {
+  return (
+    <div className={`notice ${kind}`}>
+      <span>{children}</span>
+      <button type="button" className="noticeDismiss" onClick={onDismiss} aria-label="Dismiss message">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+function NavButton({ page, currentPage, onNavigate, icon, children }) {
+  return (
+    <button type="button" className={`navButton ${currentPage === page ? 'selected' : ''}`} onClick={() => onNavigate(page)}>
+      {icon}{children}
+    </button>
   );
 }
 
@@ -918,6 +1252,110 @@ function TapByteField({ label, unit, value, onChange }) {
   );
 }
 
+function RangeNumberField({ label, unit, value, onChange, min = 0, max = 255 }) {
+  return (
+    <label className="tapControl">
+      <span className="fieldLabel">
+        <span>{label}</span>
+        <small>{unit}</small>
+      </span>
+      <div className="rangeRow">
+        <input type="range" min={min} max={max} value={value} aria-label={`${label}, ${unit}`} onChange={(event) => onChange(Number(event.target.value))} />
+        <input type="number" min={min} max={max} value={value} aria-label={`${label} value`} onChange={(event) => onChange(Number(event.target.value))} />
+      </div>
+    </label>
+  );
+}
+
+function IconGlyph({ name = defaultTask.icon, size = 16 }) {
+  const Glyph = resolveIconComponent(name);
+  return <Glyph size={size} aria-hidden="true" />;
+}
+
+function IconChoiceButton({ option, selected, onClick }) {
+  const Glyph = option.icon;
+  return (
+    <button type="button" className={`iconChoice ${selected ? 'selected' : ''}`} onClick={onClick}>
+      <Glyph size={18} aria-hidden="true" />
+      <span>{option.label}</span>
+    </button>
+  );
+}
+
+function IconDropdown({ options, value, onChange, customOption = null }) {
+  const [open, setOpen] = useState(false);
+  const allOptions = customOption ? [...options, customOption] : options;
+  const selected = allOptions.find((option) => option.value === value) || allOptions[0];
+  const SelectedGlyph = selected?.icon || Tag;
+  return (
+    <div className="iconDropdown">
+      <button type="button" className="iconDropdownButton" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
+        <SelectedGlyph size={18} aria-hidden="true" />
+        <span>{selected?.label || 'Choose icon'}</span>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="iconDropdownMenu" role="listbox">
+          {allOptions.map((option) => (
+            <IconChoiceButton
+              key={option.value}
+              option={option}
+              selected={value === option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IconBadge({ name = 'tag', color = '#d8dee9', size = 18 }) {
+  return (
+    <span className="iconBadge" style={{ background: normaliseColor(color, '#d8dee9') }}>
+      <IconGlyph name={name} size={size} />
+    </span>
+  );
+}
+
+function isStickerIcon(name) {
+  return stickerIconOptions.some((option) => option.value === name);
+}
+
+function isCustomTaskIcon(name) {
+  return Boolean(name) && !isStickerIcon(name) && customIconOptions.some((option) => option.value === name);
+}
+
+function resolveIconComponent(name) {
+  const stickerOption = stickerIconOptions.find((option) => option.value === name);
+  if (stickerOption?.icon) {
+    return stickerOption.icon;
+  }
+  const customOption = customIconOptions.find((option) => option.value === name);
+  if (customOption?.icon) {
+    return customOption.icon;
+  }
+  return legacyIconAliases[name] || Tag;
+}
+
+function humaniseIconName(name) {
+  return String(name || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function UXIcon({ size = 16 }) {
+  return <span className="letterIcon" style={{ fontSize: Math.max(10, Math.round(size * 0.72)) }}>UX</span>;
+}
+
+function QuotationIcon({ size = 16 }) {
+  return <span className="mathIcon" style={{ fontSize: Math.max(9, Math.round(size * 0.58)) }}>+−×÷</span>;
+}
+
 function WorkflowStatus({ workflow }) {
   return (
     <section className="band workflow">
@@ -947,7 +1385,7 @@ function taskFormFromFacet(config, facet) {
       mode: config.isPomodoroAssignment ? 'pomodoro' : 'task',
       id: config.taskID || '',
       label: config.label || '',
-      icon: config.icon || 'tag',
+      icon: config.icon || defaultTask.icon,
       color: normaliseColor(config.color, '#69d2a5'),
       pomodoroLimitMinutes: config.isPomodoroAssignment ? Math.max(1, secondsToMinutes(config.pomodoroLimitSeconds)) : 25,
     };
@@ -978,7 +1416,15 @@ function facetTileKind(config) {
   if (config.isPomodoroAssignment) {
     return 'Pomodoro';
   }
-  return config.icon || 'Task';
+  return iconDisplayLabel(config.icon);
+}
+
+function iconDisplayLabel(name) {
+  const stickerOption = stickerIconOptions.find((option) => option.value === name);
+  if (stickerOption) {
+    return stickerOption.label;
+  }
+  return name || 'Task';
 }
 
 function selectedFacetLabel(config, facet) {
@@ -986,6 +1432,10 @@ function selectedFacetLabel(config, facet) {
     return `Facet ${facet} is unassigned`;
   }
   return config.label || `Facet ${facet}`;
+}
+
+function isPairedDevice(device) {
+  return device?.pairingState === 'paired' || Boolean(device?.hasPassword);
 }
 
 function currentSessionForDevice(sessions = [], deviceID = '') {
@@ -1076,6 +1526,25 @@ function mergeAppState(current, next) {
   return {
     ...next,
     states: mergeDeviceStates(current.states, next.states),
+  };
+}
+
+function replaceFacetConfigsForDevice(state, deviceID, configs = []) {
+  const remaining = state.facetConfigs?.filter((item) => item.deviceID !== deviceID) || [];
+  return {
+    ...state,
+    facetConfigs: [...remaining, ...configs.map((item) => ({ ...item, deviceID }))],
+  };
+}
+
+function upsertFacetConfig(state, config) {
+  const facetConfigs = state.facetConfigs || [];
+  const found = facetConfigs.some((item) => item.deviceID === config.deviceID && item.facet === config.facet);
+  return {
+    ...state,
+    facetConfigs: found
+      ? facetConfigs.map((item) => (item.deviceID === config.deviceID && item.facet === config.facet ? { ...item, ...config } : item))
+      : [...facetConfigs, config],
   };
 }
 

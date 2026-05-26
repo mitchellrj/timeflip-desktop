@@ -342,6 +342,16 @@ func (s *SQLiteStore) GetFacetAssignment(ctx context.Context, deviceID string, f
 	return scanAssignment(row)
 }
 
+func (s *SQLiteStore) DeleteFacetAssignment(ctx context.Context, deviceID string, facet uint8) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM facet_assignments WHERE device_id = ? AND facet = ?`, deviceID, facet)
+	return wrapStoreErr("Could not clear facet assignment.", err)
+}
+
+func (s *SQLiteStore) DeleteFacetAssignments(ctx context.Context, deviceID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM facet_assignments WHERE device_id = ?`, deviceID)
+	return wrapStoreErr("Could not reset facet assignments.", err)
+}
+
 func (s *SQLiteStore) SaveDeviceState(ctx context.Context, state domain.DeviceState) error {
 	if state.UpdatedAt.IsZero() {
 		state.UpdatedAt = time.Now().UTC()
