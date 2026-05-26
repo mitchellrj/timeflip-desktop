@@ -139,6 +139,8 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$version"
           test -x "$app_dir/Contents/MacOS/timeflip-desktop"
           test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
+          codesign --force --deep --sign - "$app_dir"
+          codesign --verify --deep --strict --verbose=4 "$app_dir"
           (cd build/release-bundle && zip -qry -X "../release-assets/${asset}" "$app_name")
 
       - name: Upload release artifacts
