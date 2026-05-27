@@ -6,7 +6,10 @@ import (
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
 	"github.com/mitchellrj/timeflip-desktop/internal/services"
 	"github.com/mitchellrj/timeflip-desktop/internal/store"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+const bugReportURL = "https://github.com/mitchellrj/timeflip-desktop/issues/new?template=bug_report.yml"
 
 type Controller struct {
 	ctx        context.Context
@@ -217,6 +220,10 @@ func (c *Controller) ListTaskSessionPage(req domain.DetailedHistoryRequest) (dom
 
 func (c *Controller) SaveSettings(config domain.AppConfig) error {
 	return c.config.Save(c.context(), config)
+}
+
+func (c *Controller) OpenBugReport() error {
+	return application.Get().Browser.OpenURL(bugReportURL)
 }
 
 func (c *Controller) context() context.Context {
