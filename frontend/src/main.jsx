@@ -1326,28 +1326,30 @@ function App() {
                   <label>End<input type="datetime-local" value={historyPeriodForm.to} onChange={(event) => setHistoryPeriodForm({ ...historyPeriodForm, to: event.target.value })} /></label>
                   <button type="button" className="primary" onClick={() => loadHistoryPage(0)}><Check size={16} /> Apply</button>
                 </div>
-                {historyError && <p className="errorText">{historyError}</p>}
-                <div className="sessionList dialogSessionList">
-                  {historyPageData?.sessions?.map((session) => {
-                    const overlap = historyOverlapLabel(session, historyPeriodForm.from, historyPeriodForm.to);
-                    return (
-                      <div className="session" key={session.id}>
-                        <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
-                        <strong>{sessionTaskName(session, state.tasks)}</strong>
-                        <dl className="sessionMeta">
-                          <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
-                          <dt>Duration</dt><dd>{sessionDurationLabel(session, now)}</dd>
-                          <dt>Paused</dt><dd>{sessionPausedLabel(session, now, state.states?.find((item) => item.deviceID === session.deviceID))}</dd>
-                          {session.endedAt && <dt>End</dt>}
-                          {session.endedAt && <dd>{formatDateTime(session.endedAt)}</dd>}
-                          {overlap && <dt>Range</dt>}
-                          {overlap && <dd>{overlap}</dd>}
-                        </dl>
-                      </div>
-                    );
-                  })}
-                  {!historyLoading && historyPageData?.sessions?.length === 0 && <p className="empty">No sessions in this range.</p>}
-                  {historyLoading && <p className="empty">Loading history...</p>}
+                <div className="historyDialogContent">
+                  {historyError && <p className="errorText">{historyError}</p>}
+                  <div className="sessionList dialogSessionList">
+                    {historyPageData?.sessions?.map((session) => {
+                      const overlap = historyOverlapLabel(session, historyPeriodForm.from, historyPeriodForm.to);
+                      return (
+                        <div className="session" key={session.id}>
+                          <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
+                          <strong>{sessionTaskName(session, state.tasks)}</strong>
+                          <dl className="sessionMeta">
+                            <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
+                            <dt>Duration</dt><dd>{sessionDurationLabel(session, now)}</dd>
+                            <dt>Paused</dt><dd>{sessionPausedLabel(session, now, state.states?.find((item) => item.deviceID === session.deviceID))}</dd>
+                            {session.endedAt && <dt>End</dt>}
+                            {session.endedAt && <dd>{formatDateTime(session.endedAt)}</dd>}
+                            {overlap && <dt>Range</dt>}
+                            {overlap && <dd>{overlap}</dd>}
+                          </dl>
+                        </div>
+                      );
+                    })}
+                    {!historyLoading && historyPageData?.sessions?.length === 0 && <p className="empty">No sessions in this range.</p>}
+                    {historyLoading && <p className="empty">Loading history...</p>}
+                  </div>
                 </div>
                 <div className="pager">
                   <button type="button" disabled={!historyPageData?.hasPrevious || historyLoading} onClick={() => loadHistoryPage(Math.max(0, historyPage - 1))}>Previous</button>
