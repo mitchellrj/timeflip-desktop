@@ -25,6 +25,7 @@ type AppConfig struct {
 	CommunicationTimeout time.Duration   `json:"communicationTimeout"`
 	CommandTimeout       time.Duration   `json:"commandTimeout"`
 	ReconnectPolicy      ReconnectPolicy `json:"reconnectPolicy"`
+	WeekStartsOn         string          `json:"weekStartsOn"`
 }
 
 type ReconnectPolicy struct {
@@ -50,6 +51,7 @@ func DefaultAppConfig() AppConfig {
 		CommunicationTimeout: DefaultTimeout,
 		CommandTimeout:       5 * time.Second,
 		ReconnectPolicy:      DefaultReconnectPolicy(),
+		WeekStartsOn:         "locale",
 	}
 }
 
@@ -318,6 +320,56 @@ type TaskSessionFilter struct {
 	Facet    *uint8     `json:"facet,omitempty"`
 	From     *time.Time `json:"from,omitempty"`
 	To       *time.Time `json:"to,omitempty"`
+	Overlap  bool       `json:"overlap"`
+	Limit    int        `json:"limit"`
+	Offset   int        `json:"offset"`
+}
+
+type ReportingPeriod struct {
+	Preset       string    `json:"preset"`
+	From         time.Time `json:"from"`
+	To           time.Time `json:"to"`
+	Locale       string    `json:"locale"`
+	TimeZone     string    `json:"timeZone"`
+	WeekStartsOn string    `json:"weekStartsOn"`
+}
+
+type TimeReportRequest struct {
+	From *time.Time `json:"from,omitempty"`
+	To   *time.Time `json:"to,omitempty"`
+	Now  *time.Time `json:"now,omitempty"`
+}
+
+type TaskTimeSummary struct {
+	TaskID        string  `json:"taskID"`
+	Label         string  `json:"label"`
+	Icon          string  `json:"icon"`
+	Color         string  `json:"color"`
+	ActiveSeconds uint32  `json:"activeSeconds"`
+	Share         float64 `json:"share"`
+	Other         bool    `json:"other"`
+}
+
+type TimeReport struct {
+	Period             ReportingPeriod   `json:"period"`
+	TotalActiveSeconds uint32            `json:"totalActiveSeconds"`
+	Rows               []TaskTimeSummary `json:"rows"`
+}
+
+type DetailedHistoryRequest struct {
+	From     *time.Time `json:"from,omitempty"`
+	To       *time.Time `json:"to,omitempty"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"pageSize"`
+}
+
+type TaskSessionPage struct {
+	Sessions    []TaskSession `json:"sessions"`
+	Page        int           `json:"page"`
+	PageSize    int           `json:"pageSize"`
+	TotalCount  int           `json:"totalCount"`
+	HasNext     bool          `json:"hasNext"`
+	HasPrevious bool          `json:"hasPrevious"`
 }
 
 type ManualAction struct {

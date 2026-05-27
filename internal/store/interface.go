@@ -38,6 +38,7 @@ type Store interface {
 
 	SaveTaskSession(context.Context, domain.TaskSession) error
 	ListTaskSessions(context.Context, domain.TaskSessionFilter) ([]domain.TaskSession, error)
+	CountTaskSessions(context.Context, domain.TaskSessionFilter) (int, error)
 	GetOpenTaskSession(context.Context, string) (domain.TaskSession, error)
 
 	SaveConfig(context.Context, domain.AppConfig) error

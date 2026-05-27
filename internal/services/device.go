@@ -537,10 +537,7 @@ func (s *DeviceService) SetLocked(ctx context.Context, deviceID string, locked b
 	if err := s.saveLockedState(ctx, deviceID, locked); err != nil {
 		return err
 	}
-	if locked {
-		return s.tracking.PauseTracking(ctx, deviceID, "user_lock")
-	}
-	return s.tracking.ResumeTracking(ctx, deviceID, "user_unlock")
+	return nil
 }
 
 func (s *DeviceService) ConnectDevice(ctx context.Context, deviceID string) error {
@@ -884,9 +881,6 @@ func (s *DeviceService) saveLockedState(ctx context.Context, deviceID string, lo
 	}
 	state.ConnectionState = domain.ConnectionConnected
 	state.Locked = locked
-	if locked {
-		state.Paused = true
-	}
 	state.UpdatedAt = s.clock.Now()
 	if err := s.store.SaveDeviceState(ctx, state); err != nil {
 		return err

@@ -788,6 +788,152 @@ dd {
   font-weight: 600;
 }
 
+.reportControls {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.reportControls button {
+  min-width: 0;
+}
+
+.reportControls button.selected {
+  border-color: var(--primary-dark);
+  background: #edf8f2;
+  color: #174d3d;
+  box-shadow: inset 0 0 0 1px var(--primary-dark);
+}
+
+.periodForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.periodForm label,
+.field {
+  display: grid;
+  gap: 6px;
+  color: #50616c;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.summaryList {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.summaryList > .empty {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+}
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e0e7eb;
+  background: #fbfcfd;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.summaryMain {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.summaryHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.summaryHeader strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.summaryHeader span {
+  flex: 0 0 auto;
+  font-weight: 800;
+}
+
+.summaryBar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7eef1;
+}
+
+.summaryBarFill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+}
+
+.summaryRow.other .iconBadge {
+  color: #40505a;
+}
+
+.errorText {
+  margin-top: 10px;
+  color: #7b2f1e;
+  font-weight: 700;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 32 42 / 0.45);
+}
+
+.historyDialog {
+  width: min(920px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 18px;
+  box-shadow: 0 18px 42px rgb(16 32 42 / 0.24);
+}
+
+.dialogSessionList {
+  min-height: 0;
+  overflow: auto;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pager span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .swatch {
   width: 22px;
   height: 22px;
@@ -971,7 +1117,9 @@ dd {
 
   .grid.two,
   .facetGrid,
-  .presetGrid {
+  .presetGrid,
+  .reportControls,
+  .periodForm {
     grid-template-columns: 1fr;
   }
 
@@ -1011,6 +1159,10 @@ dd {
   .sectionActions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .historyDialog {
+    padding: 12px;
   }
 
   .colorChoices {

@@ -33,7 +33,7 @@ func (s *TrackingService) ApplyDeviceSnapshot(ctx context.Context, snapshot doma
 	if err := s.store.SaveDeviceState(ctx, state); err != nil {
 		return err
 	}
-	if !state.CurrentFacetKnown || state.CurrentFacetUndefined || state.Locked || state.Paused {
+	if !state.CurrentFacetKnown || state.CurrentFacetUndefined || state.Paused {
 		return s.PauseTracking(ctx, state.DeviceID, "snapshot")
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, state.DeviceID, state.CurrentFacet)
@@ -62,10 +62,6 @@ func (s *TrackingService) ApplyDeviceEvent(ctx context.Context, event domain.Dev
 	if !isTrackingEvent(event) {
 		return nil
 	}
-	state, err := s.updateDeviceStateFromEvent(ctx, event)
-	if err != nil {
-		return err
-	}
 	if event.Pause {
 		if err := s.setPausedState(ctx, event.DeviceID, true, event.OccurredAt); err != nil {
 			return err
@@ -78,11 +74,27 @@ func (s *TrackingService) ApplyDeviceEvent(ctx context.Context, event domain.Dev
 		}
 		return s.ResumeTrackingAt(ctx, event.DeviceID, "device_resume", event.OccurredAt)
 	}
-	if event.Facet > 0 && state.Locked {
-		if err := s.setPausedState(ctx, event.DeviceID, true, event.OccurredAt); err != nil {
+	if event.Facet > 0 {
+		current, err := s.store.GetDeviceState(ctx, event.DeviceID)
+		if err != nil && !isStoreNotFound(err) {
 			return err
 		}
-		return s.PauseTrackingAt(ctx, event.DeviceID, "locked_facet", event.OccurredAt)
+		if current.Locked {
+			current.ConnectionState = domain.ConnectionConnected
+			current.UpdatedAt = event.OccurredAt
+			if current.DeviceID == "" {
+				current.DeviceID = event.DeviceID
+			}
+			if err := s.store.SaveDeviceState(ctx, current); err != nil {
+				return err
+			}
+			s.bus.Publish(ctx, "device.state", current)
+			return nil
+		}
+	}
+	_, err := s.updateDeviceStateFromEvent(ctx, event)
+	if err != nil {
+		return err
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, event.DeviceID, event.Facet)
 	if err != nil {
@@ -207,7 +219,7 @@ func (s *TrackingService) ResumeTrackingAt(ctx context.Context, deviceID string,
 	if err != nil {
 		return err
 	}
-	if !state.CurrentFacetKnown || state.CurrentFacetUndefined || state.Locked {
+	if !state.CurrentFacetKnown || state.CurrentFacetUndefined {
 		return nil
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, deviceID, state.CurrentFacet)

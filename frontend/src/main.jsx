@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -83,7 +83,9 @@ import {
   ConnectDevice,
   DisconnectDevice,
   GetAppState,
+  GetTimeReport,
   ListTapTuningPresets,
+  ListTaskSessionPage,
   PairDevice,
   PreviewTapTuningSettings,
   ResetFacetConfiguration,
@@ -98,7 +100,7 @@ import {
   SetPaused,
   UnpairDevice,
 } from '../bindings/github.com/mitchellrj/timeflip-desktop/internal/app/controller.js';
-import { byteValue, configToSettings, defaultLEDSettings, defaultSettings, defaultTapSettings, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus } from './timeflip-format.js';
+import { byteValue, compactDuration, configToSettings, defaultHistoryPageSize, defaultLEDSettings, defaultReportPreset, defaultSettings, defaultTapSettings, formatDateTimeLocalInput, historyOverlapLabel, ledSettingsToForm, messageFromError, rangeValue, reportPeriodForPreset, secondsToDuration, summaryBarPercent, toControllerPeriodRequest, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus, validateCustomPeriod } from './timeflip-format.js';
 import './styles.css';
 
 const emptyState = { config: {}, devices: [], states: [], tapSettings: [], tapTuningStates: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
@@ -190,6 +192,24 @@ function App() {
   const [workflow, setWorkflow] = useState(null);
   const [pendingClearFacet, setPendingClearFacet] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const [reportPreset, setReportPreset] = useState(defaultReportPreset);
+  const [reportPeriod, setReportPeriod] = useState(() => reportPeriodForPreset(defaultReportPreset, new Date()));
+  const [customPeriodForm, setCustomPeriodForm] = useState(() => {
+    const period = reportPeriodForPreset(defaultReportPreset, new Date());
+    return { from: formatDateTimeLocalInput(period.from), to: formatDateTimeLocalInput(period.to) };
+  });
+  const [report, setReport] = useState(null);
+  const [reportError, setReportError] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyPeriodForm, setHistoryPeriodForm] = useState(() => {
+    const period = reportPeriodForPreset(defaultReportPreset, new Date());
+    return { from: formatDateTimeLocalInput(period.from), to: formatDateTimeLocalInput(period.to) };
+  });
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyPageData, setHistoryPageData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const refreshVersion = useRef(0);
 
   async function refresh() {
@@ -229,6 +249,80 @@ function App() {
     } finally {
       setBusy('');
     }
+  }
+
+  const loadReport = useCallback(async (period = reportPeriod, timestamp = Date.now(), options = {}) => {
+    if (!options.quiet) {
+      setReportLoading(true);
+    }
+    setReportError('');
+    try {
+      const next = await GetTimeReport(toControllerPeriodRequest(period, new Date(timestamp)));
+      setReport(next);
+      return next;
+    } catch (err) {
+      setReportError(messageFromError(err));
+      return null;
+    } finally {
+      if (!options.quiet) {
+        setReportLoading(false);
+      }
+    }
+  }, [reportPeriod]);
+
+  const loadHistoryPage = useCallback(async (page = 0, form = historyPeriodForm) => {
+    const validation = validateCustomPeriod(form.from, form.to, { weekStartsOn: settingsForm.weekStartsOn });
+    if (!validation.valid) {
+      setHistoryError(validation.error);
+      return null;
+    }
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const next = await ListTaskSessionPage({
+        ...toControllerPeriodRequest(validation.period, new Date()),
+        page,
+        pageSize: defaultHistoryPageSize,
+      });
+      setHistoryPage(page);
+      setHistoryPageData(next);
+      return next;
+    } catch (err) {
+      setHistoryError(messageFromError(err));
+      return null;
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [historyPeriodForm, settingsForm.weekStartsOn]);
+
+  function chooseReportPreset(preset) {
+    setReportError('');
+    if (preset === 'custom') {
+      setReportPreset('custom');
+      return;
+    }
+    const period = reportPeriodForPreset(preset, new Date(now), { weekStartsOn: settingsForm.weekStartsOn });
+    setReportPreset(preset);
+    setReportPeriod(period);
+    setCustomPeriodForm({ from: formatDateTimeLocalInput(period.from), to: formatDateTimeLocalInput(period.to) });
+  }
+
+  function applyCustomReport() {
+    const validation = validateCustomPeriod(customPeriodForm.from, customPeriodForm.to, { weekStartsOn: settingsForm.weekStartsOn });
+    if (!validation.valid) {
+      setReportError(validation.error);
+      return;
+    }
+    setReportPreset('custom');
+    setReportPeriod(validation.period);
+    setReportError('');
+  }
+
+  function openHistoryDialog() {
+    const form = { from: formatDateTimeLocalInput(reportPeriod.from), to: formatDateTimeLocalInput(reportPeriod.to) };
+    setHistoryPeriodForm(form);
+    setHistoryDialogOpen(true);
+    loadHistoryPage(0, form);
   }
 
   useEffect(() => {
@@ -338,6 +432,28 @@ function App() {
   const currentSessionLabel = currentSession ? sessionDurationLabel(currentSession, now) : 'No running session';
   const currentPausedLabel = currentSession ? sessionPausedLabel(currentSession, now, activeState) : '0 sec';
   const taskFormUsesCustomIcon = isCustomTaskIcon(taskForm.icon);
+  const reportRows = report?.rows || [];
+  const reportTotal = Number(report?.totalActiveSeconds || 0);
+
+  useEffect(() => {
+    if (reportPreset !== 'custom') {
+      const period = reportPeriodForPreset(reportPreset, new Date(now), { weekStartsOn: settingsForm.weekStartsOn });
+      setReportPeriod(period);
+      setCustomPeriodForm({ from: formatDateTimeLocalInput(period.from), to: formatDateTimeLocalInput(period.to) });
+    }
+  }, [reportPreset, settingsForm.weekStartsOn]);
+
+  useEffect(() => {
+    if (visiblePage === 'track') {
+      loadReport(reportPeriod, now);
+    }
+  }, [visiblePage, reportPeriod, loadReport]);
+
+  useEffect(() => {
+    if (visiblePage === 'track' && currentSession && !currentSession.endedAt) {
+      loadReport(reportPeriod, now, { quiet: true });
+    }
+  }, [visiblePage, now, currentSession?.id, currentSession?.endedAt, currentSession?.pauseStartedAt, reportPeriod, loadReport]);
 
   useEffect(() => {
     if (selectedDevice) {
@@ -591,6 +707,7 @@ function App() {
         offlineAfterDuration: secondsToDuration(settingsForm.offlineAfterSeconds),
         offlineAfterFailures: Number(settingsForm.offlineAfterFailures || 0),
       },
+      weekStartsOn: settingsForm.weekStartsOn || 'locale',
     };
     await runAction('settings', () => SaveSettings(config), 'Settings saved');
   }
@@ -1115,28 +1232,132 @@ function App() {
         )}
 
         {visiblePage === 'track' && (
-        <section id="history" className="band">
-          <div className="sectionTitle">
-            <h2><History size={20} /> Task Sessions</h2>
-            <p>Recent local sessions, with paused time separated from elapsed time.</p>
-          </div>
-          <div className="sessionList">
-            {state.sessions?.slice(0, 12).map((session) => (
-              <div className="session" key={session.id}>
-                <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
-                <strong>{sessionTaskName(session, state.tasks)}</strong>
-                <dl className="sessionMeta">
-                  <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
-                  <dt>Duration</dt><dd>{sessionDurationLabel(session, now)}</dd>
-                  <dt>Paused</dt><dd>{sessionPausedLabel(session, now, state.states?.find((item) => item.deviceID === session.deviceID))}</dd>
-                  {session.endedAt && <dt>End</dt>}
-                  {session.endedAt && <dd>{formatDateTime(session.endedAt)}</dd>}
-                </dl>
+        <>
+          <section id="report" className="band">
+            <div className="sectionTitle">
+              <div>
+                <h2><ChartNoAxesCombined size={20} /> Time Summary</h2>
+                <p>{reportPeriodLabel(reportPeriod)} · all devices</p>
               </div>
-            ))}
-            {state.sessions?.length === 0 && <p className="empty">No task sessions recorded yet.</p>}
-          </div>
-        </section>
+              <div className="sectionActions">
+                <button type="button" onClick={() => loadReport(reportPeriod, now)} disabled={reportLoading}><RefreshCw size={16} /> Refresh</button>
+              </div>
+            </div>
+            <div className="reportControls" aria-label="Report period">
+              {[
+                ['today', 'Today'],
+                ['yesterday', 'Yesterday'],
+                ['this-week', 'This week'],
+                ['this-month', 'This month'],
+                ['custom', 'Custom'],
+              ].map(([value, label]) => (
+                <button type="button" key={value} className={reportPreset === value ? 'selected' : ''} onClick={() => chooseReportPreset(value)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {reportPreset === 'custom' && (
+              <div className="periodForm">
+                <label>Start<input type="datetime-local" value={customPeriodForm.from} onChange={(event) => setCustomPeriodForm({ ...customPeriodForm, from: event.target.value })} /></label>
+                <label>End<input type="datetime-local" value={customPeriodForm.to} onChange={(event) => setCustomPeriodForm({ ...customPeriodForm, to: event.target.value })} /></label>
+                <button type="button" className="primary" onClick={applyCustomReport}><Check size={16} /> Apply</button>
+              </div>
+            )}
+            {reportError && <p className="errorText">{reportError}</p>}
+            <div className="summaryList">
+              {reportRows.map((row) => (
+                <div className={`summaryRow ${row.other ? 'other' : ''}`} key={`${row.taskID || 'other'}:${row.label}:${row.color}`}>
+                  <IconBadge name={row.icon || 'layers'} color={row.color || '#d8dee9'} />
+                  <div className="summaryMain">
+                    <div className="summaryHeader">
+                      <strong>{row.label || 'Unnamed task'}</strong>
+                      <span>{compactDuration(row.activeSeconds)}</span>
+                    </div>
+                    <div className="summaryBar" aria-label={`${row.label || 'Unnamed task'} ${Math.round(Number(row.share || 0) * 100)} percent`}>
+                      <span className="summaryBarFill" style={{ width: `${summaryBarPercent(row, reportRows)}%`, background: row.color || '#d8dee9' }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {report && reportTotal === 0 && <p className="empty">No tracked task time for this period.</p>}
+              {!report && reportLoading && <p className="empty stableEmpty">Loading report...</p>}
+            </div>
+          </section>
+
+          <section id="history" className="band">
+            <div className="sectionTitle">
+              <div>
+                <h2><History size={20} /> Task Sessions</h2>
+                <p>Recent local sessions, with paused time separated from elapsed time.</p>
+              </div>
+              <div className="sectionActions">
+                <button type="button" onClick={openHistoryDialog}><History size={16} /> Detailed History</button>
+              </div>
+            </div>
+            <div className="sessionList">
+              {state.sessions?.slice(0, 12).map((session) => (
+                <div className="session" key={session.id}>
+                  <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
+                  <strong>{sessionTaskName(session, state.tasks)}</strong>
+                  <dl className="sessionMeta">
+                    <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
+                    <dt>Duration</dt><dd>{sessionDurationLabel(session, now)}</dd>
+                    <dt>Paused</dt><dd>{sessionPausedLabel(session, now, state.states?.find((item) => item.deviceID === session.deviceID))}</dd>
+                    {session.endedAt && <dt>End</dt>}
+                    {session.endedAt && <dd>{formatDateTime(session.endedAt)}</dd>}
+                  </dl>
+                </div>
+              ))}
+              {state.sessions?.length === 0 && <p className="empty">No task sessions recorded yet.</p>}
+            </div>
+          </section>
+          {historyDialogOpen && (
+            <div className="dialogBackdrop" role="presentation">
+              <section className="historyDialog" role="dialog" aria-modal="true" aria-labelledby="historyDialogTitle">
+                <div className="sectionTitle">
+                  <div>
+                    <h2 id="historyDialogTitle"><History size={20} /> Detailed History</h2>
+                    <p>{historyPageData?.totalCount || 0} matching sessions</p>
+                  </div>
+                  <button type="button" onClick={() => setHistoryDialogOpen(false)} title="Close"><X size={18} /></button>
+                </div>
+                <div className="periodForm">
+                  <label>Start<input type="datetime-local" value={historyPeriodForm.from} onChange={(event) => setHistoryPeriodForm({ ...historyPeriodForm, from: event.target.value })} /></label>
+                  <label>End<input type="datetime-local" value={historyPeriodForm.to} onChange={(event) => setHistoryPeriodForm({ ...historyPeriodForm, to: event.target.value })} /></label>
+                  <button type="button" className="primary" onClick={() => loadHistoryPage(0)}><Check size={16} /> Apply</button>
+                </div>
+                {historyError && <p className="errorText">{historyError}</p>}
+                <div className="sessionList dialogSessionList">
+                  {historyPageData?.sessions?.map((session) => {
+                    const overlap = historyOverlapLabel(session, historyPeriodForm.from, historyPeriodForm.to);
+                    return (
+                      <div className="session" key={session.id}>
+                        <IconBadge name={session.taskIconSnapshot} color={session.taskColorSnapshot || '#d8dee9'} />
+                        <strong>{sessionTaskName(session, state.tasks)}</strong>
+                        <dl className="sessionMeta">
+                          <dt>Start</dt><dd>{formatDateTime(session.startedAt)}</dd>
+                          <dt>Duration</dt><dd>{sessionDurationLabel(session, now)}</dd>
+                          <dt>Paused</dt><dd>{sessionPausedLabel(session, now, state.states?.find((item) => item.deviceID === session.deviceID))}</dd>
+                          {session.endedAt && <dt>End</dt>}
+                          {session.endedAt && <dd>{formatDateTime(session.endedAt)}</dd>}
+                          {overlap && <dt>Range</dt>}
+                          {overlap && <dd>{overlap}</dd>}
+                        </dl>
+                      </div>
+                    );
+                  })}
+                  {!historyLoading && historyPageData?.sessions?.length === 0 && <p className="empty">No sessions in this range.</p>}
+                  {historyLoading && <p className="empty">Loading history...</p>}
+                </div>
+                <div className="pager">
+                  <button type="button" disabled={!historyPageData?.hasPrevious || historyLoading} onClick={() => loadHistoryPage(Math.max(0, historyPage - 1))}>Previous</button>
+                  <span>Page {historyPage + 1}</span>
+                  <button type="button" disabled={!historyPageData?.hasNext || historyLoading} onClick={() => loadHistoryPage(historyPage + 1)}>Next</button>
+                </div>
+              </section>
+            </div>
+          )}
+        </>
         )}
 
         {visiblePage === 'config' && (
@@ -1156,6 +1377,15 @@ function App() {
               <NumberField label="Long retry" unit="seconds" value={settingsForm.longRetrySeconds} onChange={(value) => setSettingsForm({ ...settingsForm, longRetrySeconds: value })} />
               <NumberField label="Mark offline after" unit="seconds" value={settingsForm.offlineAfterSeconds} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterSeconds: value })} />
               <NumberField label="Failure threshold" unit="failures" value={settingsForm.offlineAfterFailures} onChange={(value) => setSettingsForm({ ...settingsForm, offlineAfterFailures: value })} />
+              <label className="field">
+                <span>Week starts</span>
+                <select value={settingsForm.weekStartsOn} onChange={(event) => setSettingsForm({ ...settingsForm, weekStartsOn: event.target.value })}>
+                  <option value="locale">Locale default</option>
+                  <option value="monday">Monday</option>
+                  <option value="sunday">Sunday</option>
+                  <option value="saturday">Saturday</option>
+                </select>
+              </label>
               <button className="primary" disabled={busy === 'settings'}><Save size={16} /> Save Settings</button>
             </form>
           </details>
@@ -1624,6 +1854,13 @@ function formatDateTime(value) {
     return 'Not recorded';
   }
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function reportPeriodLabel(period) {
+  if (!period?.from || !period?.to) {
+    return 'No period selected';
+  }
+  return `${formatDateTime(period.from)} to ${formatDateTime(period.to)}`;
 }
 
 function formatTime(value) {

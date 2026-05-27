@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { byteValue, configToSettings, durationToSeconds, ledSettingsToForm, messageFromError, rangeValue, secondsToDuration, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus } from './timeflip-format.js';
+import { byteValue, compactDuration, configToSettings, durationToSeconds, formatDateTimeLocalInput, historyOverlapLabel, ledSettingsToForm, messageFromError, rangeValue, reportPeriodForPreset, secondsToDuration, summaryBarPercent, tapFormToSettings, tapPresetToForm, tapSettingsToForm, tapTuningStatus, toControllerPeriodRequest, validateCustomPeriod } from './timeflip-format.js';
 
 test('converts Go duration nanoseconds to seconds', () => {
   assert.equal(durationToSeconds(15_000_000_000, 1), 15);
@@ -24,6 +24,7 @@ test('maps app config to editable settings', () => {
       offlineAfterDuration: 120_000_000_000,
       offlineAfterFailures: 4,
     },
+    weekStartsOn: 'monday',
   }), {
     communicationTimeoutSeconds: 10,
     commandTimeoutSeconds: 5,
@@ -32,6 +33,7 @@ test('maps app config to editable settings', () => {
     longRetrySeconds: 300,
     offlineAfterSeconds: 120,
     offlineAfterFailures: 4,
+    weekStartsOn: 'monday',
   });
 });
 
@@ -115,4 +117,73 @@ test('normalises frontend error messages', () => {
     },
     kind: 'RuntimeError',
   })), 'Bluetooth is unavailable or turned off.');
+});
+
+test('builds locale-aware report preset periods', () => {
+  const now = new Date(2026, 4, 27, 15, 30);
+  const today = reportPeriodForPreset('today', now, { locale: 'en-GB', weekStartsOn: 'locale' });
+  assert.equal(formatDateTimeLocalInput(today.from), '2026-05-27T00:00');
+  assert.equal(formatDateTimeLocalInput(today.to), '2026-05-28T00:00');
+
+  const yesterday = reportPeriodForPreset('yesterday', now, { locale: 'en-GB' });
+  assert.equal(formatDateTimeLocalInput(yesterday.from), '2026-05-26T00:00');
+  assert.equal(formatDateTimeLocalInput(yesterday.to), '2026-05-27T00:00');
+
+  const week = reportPeriodForPreset('this-week', now, { locale: 'en-GB', weekStartsOn: 'monday' });
+  assert.equal(formatDateTimeLocalInput(week.from), '2026-05-25T00:00');
+  assert.equal(formatDateTimeLocalInput(week.to), '2026-06-01T00:00');
+
+  const month = reportPeriodForPreset('this-month', now, { locale: 'en-GB' });
+  assert.equal(formatDateTimeLocalInput(month.from), '2026-05-01T00:00');
+  assert.equal(formatDateTimeLocalInput(month.to), '2026-06-01T00:00');
+});
+
+test('uses calendar days for preset boundaries across daylight saving changes', () => {
+  const now = new Date(2026, 2, 29, 12, 0);
+  const period = reportPeriodForPreset('today', now, { locale: 'en-GB' });
+  assert.equal(formatDateTimeLocalInput(period.from), '2026-03-29T00:00');
+  assert.equal(formatDateTimeLocalInput(period.to), '2026-03-30T00:00');
+});
+
+test('validates custom report periods', () => {
+  const valid = validateCustomPeriod('2026-05-27T09:00', '2026-05-27T10:00', { locale: 'en-GB', weekStartsOn: 'monday' });
+  assert.equal(valid.valid, true);
+  assert.equal(valid.period.weekStartsOn, 'monday');
+  assert.equal(validateCustomPeriod('', '2026-05-27T10:00').error, 'Start and end are required.');
+  assert.equal(validateCustomPeriod('2026-05-27T10:00', '2026-05-27T10:00').error, 'Start must be before end.');
+  assert.equal(validateCustomPeriod('2026-05-27T11:00', '2026-05-27T10:00').error, 'Start must be before end.');
+});
+
+test('maps report periods to controller request dates', () => {
+  const from = new Date(2026, 4, 27, 9, 0);
+  const to = new Date(2026, 4, 27, 10, 0);
+  const now = new Date(2026, 4, 27, 9, 30);
+  const request = toControllerPeriodRequest({ from, to }, now);
+  assert.equal(request.from, from);
+  assert.equal(request.to, to);
+  assert.equal(request.now, now);
+});
+
+test('formats compact durations', () => {
+  assert.equal(compactDuration(45), '45s');
+  assert.equal(compactDuration(90), '1m');
+  assert.equal(compactDuration(3660), '1h 1m');
+  assert.equal(compactDuration(172800), '2d');
+  assert.equal(compactDuration(183600), '2d 3h');
+});
+
+test('calculates summary bar percentages', () => {
+  const rows = [{ activeSeconds: 100 }, { activeSeconds: 40 }, { activeSeconds: 0 }];
+  assert.equal(summaryBarPercent(rows[0], rows), 100);
+  assert.equal(summaryBarPercent(rows[1], rows), 40);
+  assert.equal(summaryBarPercent(rows[2], rows), 0);
+});
+
+test('labels history rows that overlap selected range boundaries', () => {
+  const from = new Date(2026, 4, 27, 10, 0);
+  const to = new Date(2026, 4, 27, 11, 0);
+  assert.equal(historyOverlapLabel({ startedAt: new Date(2026, 4, 27, 9, 0), endedAt: new Date(2026, 4, 27, 10, 30) }, from, to), 'started before range');
+  assert.equal(historyOverlapLabel({ startedAt: new Date(2026, 4, 27, 10, 30), endedAt: new Date(2026, 4, 27, 12, 0) }, from, to), 'continues after range');
+  assert.equal(historyOverlapLabel({ startedAt: new Date(2026, 4, 27, 9, 0), endedAt: new Date(2026, 4, 27, 12, 0) }, from, to), 'spans selected range');
+  assert.equal(historyOverlapLabel({ startedAt: new Date(2026, 4, 27, 10, 15), endedAt: new Date(2026, 4, 27, 10, 45) }, from, to), '');
 });

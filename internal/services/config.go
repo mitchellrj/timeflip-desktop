@@ -33,5 +33,15 @@ func (s *ConfigService) Save(ctx context.Context, config domain.AppConfig) error
 	if config.CommandTimeout == 0 {
 		config.CommandTimeout = 5 * time.Second
 	}
+	config.WeekStartsOn = normaliseWeekStartsOn(config.WeekStartsOn)
 	return s.store.SaveConfig(ctx, config)
+}
+
+func normaliseWeekStartsOn(value string) string {
+	switch value {
+	case "monday", "sunday", "saturday":
+		return value
+	default:
+		return "locale"
+	}
 }
