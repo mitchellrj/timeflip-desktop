@@ -3,6 +3,7 @@ description: Report a reproducible defect for Codex-assisted triage.
 title: "[Bug]: "
 labels:
   - bug
+  - needs-triage
 body:
   - type: markdown
     attributes:
@@ -40,6 +41,7 @@ body:
         - High - core workflow blocked, no reasonable workaround
         - Medium - workflow degraded, workaround exists
         - Low - minor defect, polish, or documentation issue
+        - Unknown - needs triage
     validations:
       required: true
   - type: dropdown
@@ -48,6 +50,7 @@ body:
       label: Size / complexity / effort estimate
       description: Pick an initial estimate. L and XL should go through `/spdd-analysis`.
       options:
+        - U - unknown
         - S - isolated fix, clear cause, one area
         - M - moderate investigation or several related files
         - L - multi-area change, unclear design, or substantial risk

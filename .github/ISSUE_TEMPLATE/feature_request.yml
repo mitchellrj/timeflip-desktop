@@ -3,6 +3,7 @@ description: Propose a change with enough structure for Codex-assisted analysis.
 title: "[Feature]: "
 labels:
   - enhancement
+  - needs-triage
 body:
   - type: markdown
     attributes:
@@ -13,8 +14,6 @@ body:
         - Report type: feature request
         - Impact: selected below, supported by user value and urgency
         - Size / complexity / effort estimate: selected below, supported by scope signals
-
-        L and XL requests should be sent through `/spdd-analysis` before REASONS-Canvas or implementation.
   - type: dropdown
     id: report_type
     attributes:
@@ -39,6 +38,7 @@ body:
         - High - major workflow value for primary users
         - Medium - meaningful improvement with alternatives available
         - Low - nice-to-have, polish, or documentation improvement
+        - U - unknown, needs triage
     validations:
       required: true
   - type: dropdown
@@ -47,6 +47,7 @@ body:
       label: Size / complexity / effort estimate
       description: Pick an initial estimate. L and XL should go through `/spdd-analysis`.
       options:
+        - U - unknown, needs triage
         - S - isolated change, clear acceptance criteria, one area
         - M - several related files or moderate design choices
         - L - multiple areas, new domain concepts, or substantial risk
