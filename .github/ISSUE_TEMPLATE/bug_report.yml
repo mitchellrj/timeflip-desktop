@@ -9,13 +9,6 @@ body:
     attributes:
       value: |
         Use this form for defects, regressions, crashes, data loss, or incorrect behavior.
-
-        Codex triage should extract:
-        - Report type: bug
-        - Impact: selected below, supported by symptoms and affected users
-        - Size / complexity / effort estimate: selected below, supported by scope signals
-
-        L and XL reports should be sent through `/spdd-analysis` before implementation planning.
   - type: dropdown
     id: report_type
     attributes:
