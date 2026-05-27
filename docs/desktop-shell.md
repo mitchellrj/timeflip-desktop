@@ -26,7 +26,7 @@ The control centre uses Wails v3 system tray menus:
 - Current module: `github.com/wailsapp/wails/v3 v3.0.0-alpha.95`
 - Shell entry point: `internal/app/runner.go`
 
-The tray is created with `app.SystemTray.New()`, uses a sandtimer template icon with a play/pause state marker, and installs a dynamic menu with:
+The tray is created with `app.SystemTray.New()`, uses a plain sandtimer template icon while disconnected, switches to play/pause sandtimer variants while connected, and installs a dynamic menu with:
 
 - Current tracking or connection status.
 - Open Window.

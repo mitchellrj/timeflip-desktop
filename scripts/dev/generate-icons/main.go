@@ -25,8 +25,9 @@ var (
 func main() {
 	writePNG("build/assets/appicon.png", renderAppIcon(1024))
 	writePNG("internal/app/icon_assets/appicon.png", renderAppIcon(512))
-	writePNG("internal/app/icon_assets/tray-running.png", renderTrayIcon(64, false))
-	writePNG("internal/app/icon_assets/tray-paused.png", renderTrayIcon(64, true))
+	writePNG("internal/app/icon_assets/tray-plain.png", renderTrayIcon(64, trayPlain))
+	writePNG("internal/app/icon_assets/tray-running.png", renderTrayIcon(64, trayRunning))
+	writePNG("internal/app/icon_assets/tray-paused.png", renderTrayIcon(64, trayPaused))
 }
 
 func renderAppIcon(size int) image.Image {
@@ -39,12 +40,24 @@ func renderAppIcon(size int) image.Image {
 	return downsample(img, scale)
 }
 
-func renderTrayIcon(size int, paused bool) image.Image {
+type trayState int
+
+const (
+	trayPlain trayState = iota
+	trayRunning
+	trayPaused
+)
+
+func renderTrayIcon(size int, state trayState) image.Image {
 	scale := 4
 	img := image.NewRGBA(image.Rect(0, 0, size*scale, size*scale))
 	s := float64(size * scale)
+	if state == trayPlain {
+		drawHourglass(img, 0.25*s, 0.17*s, 0.50*s, 0.62*s, 0.045*s, template, color.RGBA{})
+		return downsample(img, scale)
+	}
 	drawHourglass(img, 0.17*s, 0.17*s, 0.42*s, 0.62*s, 0.045*s, template, color.RGBA{})
-	if paused {
+	if state == trayPaused {
 		drawRoundedRect(img, 0.68*s, 0.60*s, 0.055*s, 0.25*s, 0.018*s, template)
 		drawRoundedRect(img, 0.79*s, 0.60*s, 0.055*s, 0.25*s, 0.018*s, template)
 	} else {

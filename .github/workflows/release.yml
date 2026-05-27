@@ -194,6 +194,7 @@ jobs:
             exit 1
           fi
           go build -trimpath -o "$app_dir/Contents/MacOS/timeflip-desktop" ./cmd/timeflip-desktop
+          cp build/assets/icons.icns "$app_dir/Contents/Resources/icons.icns"
           cp -R frontend/dist "$app_dir/Contents/Resources/frontend/dist"
           cp README.md LICENSE "$app_dir/Contents/Resources/"
 
@@ -210,6 +211,8 @@ jobs:
             <string>timeflip-desktop</string>
             <key>CFBundleIdentifier</key>
             <string>com.mitchellrj.timeflip-desktop</string>
+            <key>CFBundleIconFile</key>
+            <string>icons</string>
             <key>CFBundleInfoDictionaryVersion</key>
             <string>6.0</string>
             <key>CFBundleName</key>
@@ -232,11 +235,13 @@ jobs:
 
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app_dir/Contents/Info.plist")" = "TimeFlip Desktop"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_dir/Contents/Info.plist")" = "com.mitchellrj.timeflip-desktop"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app_dir/Contents/Info.plist")" = "icons"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")" = "$marketing_version"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_dir/Contents/Info.plist")" = "$build_version"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' "$app_dir/Contents/Info.plist")" != ""
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSBluetoothPeripheralUsageDescription' "$app_dir/Contents/Info.plist")" != ""
           test -x "$app_dir/Contents/MacOS/timeflip-desktop"
+          test -f "$app_dir/Contents/Resources/icons.icns"
           test -f "$app_dir/Contents/Resources/frontend/dist/index.html"
           if [[ "$APPLE_SIGNING_AVAILABLE" == "true" ]]; then
             codesign \

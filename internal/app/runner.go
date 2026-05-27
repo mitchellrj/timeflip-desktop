@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/mitchellrj/timeflip-desktop/internal/domain"
 	"github.com/mitchellrj/timeflip-desktop/internal/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -95,19 +96,22 @@ func configureControlCentre(wailsApp *application.App, controller *Controller, w
 
 func setControlCentreIcon(systemTray *application.SystemTray, controller *Controller) {
 	state, err := controller.GetAppState()
-	paused := false
+	target := controlCentreTarget{}
 	if err == nil {
-		paused = controlCentreDevice(state).paused
+		target = controlCentreDevice(state)
 	}
 	if runtime.GOOS == "darwin" {
-		systemTray.SetTemplateIcon(controlCentreTrayIcon(paused))
+		systemTray.SetTemplateIcon(controlCentreTrayIcon(target))
 		return
 	}
-	systemTray.SetIcon(controlCentreTrayIcon(paused))
+	systemTray.SetIcon(controlCentreTrayIcon(target))
 }
 
-func controlCentreTrayIcon(paused bool) []byte {
-	if paused {
+func controlCentreTrayIcon(target controlCentreTarget) []byte {
+	if !target.connected {
+		return trayPlainIconPNG
+	}
+	if target.paused {
 		return trayPausedIconPNG
 	}
 	return trayRunningIconPNG
@@ -201,19 +205,21 @@ func controlCentreStatusLabel(state services.AppState) string {
 }
 
 type controlCentreTarget struct {
-	deviceID string
-	paused   bool
-	locked   bool
-	ok       bool
+	deviceID  string
+	paused    bool
+	locked    bool
+	connected bool
+	ok        bool
 }
 
 func controlCentreDevice(state services.AppState) controlCentreTarget {
 	if len(state.States) > 0 {
 		return controlCentreTarget{
-			deviceID: state.States[0].DeviceID,
-			paused:   state.States[0].Paused,
-			locked:   state.States[0].Locked,
-			ok:       true,
+			deviceID:  state.States[0].DeviceID,
+			paused:    state.States[0].Paused,
+			locked:    state.States[0].Locked,
+			connected: state.States[0].ConnectionState == domain.ConnectionConnected,
+			ok:        true,
 		}
 	}
 	if len(state.Devices) > 0 {
