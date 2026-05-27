@@ -1,0 +1,155 @@
+name: Bug report
+description: Report a reproducible defect for Codex-assisted triage.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for defects, regressions, crashes, data loss, or incorrect behavior.
+
+        Codex triage should extract:
+        - Report type: bug
+        - Impact: selected below, supported by symptoms and affected users
+        - Size / complexity / effort estimate: selected below, supported by scope signals
+
+        L and XL reports should be sent through `/spdd-analysis` before implementation planning.
+  - type: dropdown
+    id: report_type
+    attributes:
+      label: Report type
+      description: Pick the closest defect category.
+      options:
+        - Bug - incorrect behavior
+        - Regression - previously working behavior broke
+        - Crash or hang
+        - Data loss or corruption
+        - Performance problem
+        - Security or privacy concern
+        - Documentation or developer experience defect
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: Choose the highest confirmed impact.
+      options:
+        - Critical - data loss, security issue, or app unusable
+        - High - core workflow blocked, no reasonable workaround
+        - Medium - workflow degraded, workaround exists
+        - Low - minor defect, polish, or documentation issue
+    validations:
+      required: true
+  - type: dropdown
+    id: effort_estimate
+    attributes:
+      label: Size / complexity / effort estimate
+      description: Pick an initial estimate. L and XL should go through `/spdd-analysis`.
+      options:
+        - S - isolated fix, clear cause, one area
+        - M - moderate investigation or several related files
+        - L - multi-area change, unclear design, or substantial risk
+        - XL - broad feature-sized repair, architecture change, or high uncertainty
+    validations:
+      required: true
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Select the closest repository area.
+      options:
+        - App shell / Wails runtime
+        - TIMEFLIP device / Bluetooth
+        - Tracking / sessions
+        - Tasks / facets / configuration
+        - Timer / pomodoro behavior
+        - Data storage / migrations
+        - UI / frontend
+        - Packaging / release / CI
+        - Documentation / developer tooling
+        - Unknown / needs triage
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: State the problem in one or two sentences.
+      placeholder: The app does X when Y should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Steps to reproduce
+      description: Give deterministic steps where possible.
+      placeholder: |
+        1. Start the app
+        2. Connect a TIMEFLIP device
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: Describe the intended result.
+    validations:
+      required: true
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual behavior
+      description: Describe what actually happened, including exact errors where available.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Attach logs, screenshots, recordings, traces, or relevant command output.
+      placeholder: Paste short excerpts here and attach larger files to the issue.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include app version, OS, architecture, device model, firmware, and install method if relevant.
+      placeholder: |
+        App version:
+        OS / architecture:
+        TIMEFLIP device / firmware:
+        Install method:
+    validations:
+      required: false
+  - type: textarea
+    id: scope_signals
+    attributes:
+      label: Scope and complexity signals
+      description: Note why the selected effort estimate seems right.
+      placeholder: |
+        Suspected files or components:
+        New tests likely needed:
+        Risky integrations:
+        Unknowns:
+    validations:
+      required: false
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Describe any current workaround and whether it is acceptable.
+    validations:
+      required: false
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I included enough detail for Codex to classify type, impact, and effort.
+          required: true

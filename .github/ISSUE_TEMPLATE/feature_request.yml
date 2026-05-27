@@ -1,0 +1,143 @@
+name: Feature request
+description: Propose a change with enough structure for Codex-assisted analysis.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for new capabilities, workflow improvements, UI changes, integrations, or refactors with user-visible value.
+
+        Codex triage should extract:
+        - Report type: feature request
+        - Impact: selected below, supported by user value and urgency
+        - Size / complexity / effort estimate: selected below, supported by scope signals
+
+        L and XL requests should be sent through `/spdd-analysis` before REASONS-Canvas or implementation.
+  - type: dropdown
+    id: report_type
+    attributes:
+      label: Report type
+      description: Pick the closest request category.
+      options:
+        - Feature - new user-facing capability
+        - Enhancement - improve an existing workflow
+        - UI / UX improvement
+        - Integration or automation
+        - Refactor with user-visible value
+        - Documentation or developer experience improvement
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: Choose the expected user or project impact.
+      options:
+        - Critical - unlocks a blocked release or required workflow
+        - High - major workflow value for primary users
+        - Medium - meaningful improvement with alternatives available
+        - Low - nice-to-have, polish, or documentation improvement
+    validations:
+      required: true
+  - type: dropdown
+    id: effort_estimate
+    attributes:
+      label: Size / complexity / effort estimate
+      description: Pick an initial estimate. L and XL should go through `/spdd-analysis`.
+      options:
+        - S - isolated change, clear acceptance criteria, one area
+        - M - several related files or moderate design choices
+        - L - multiple areas, new domain concepts, or substantial risk
+        - XL - broad initiative, architecture change, or high uncertainty
+    validations:
+      required: true
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Select the closest repository area.
+      options:
+        - App shell / Wails runtime
+        - TIMEFLIP device / Bluetooth
+        - Tracking / sessions
+        - Tasks / facets / configuration
+        - Timer / pomodoro behavior
+        - Data storage / migrations
+        - UI / frontend
+        - Packaging / release / CI
+        - Documentation / developer tooling
+        - Unknown / needs triage
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Describe the user problem, workflow gap, or project opportunity.
+      placeholder: Users need to... because...
+    validations:
+      required: true
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the result users or maintainers should get.
+      placeholder: After this change, users can...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes that would make the request complete.
+      placeholder: |
+        - Given ..., when ..., then ...
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: List related things this request should not include.
+      placeholder: This request does not include...
+    validations:
+      required: false
+  - type: textarea
+    id: scope_signals
+    attributes:
+      label: Scope and complexity signals
+      description: Note why the selected effort estimate seems right.
+      placeholder: |
+        Existing concepts or components affected:
+        New concepts likely needed:
+        UI / storage / device / release impact:
+        New tests likely needed:
+        Unknowns:
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe workarounds, simpler options, or rejected approaches.
+    validations:
+      required: false
+  - type: textarea
+    id: supporting_context
+    attributes:
+      label: Supporting context
+      description: Add links, screenshots, sketches, logs, related issues, or prior SPDD files.
+    validations:
+      required: false
+  - type: checkboxes
+    id: spdd_routing
+    attributes:
+      label: SPDD routing
+      options:
+        - label: If this is L or XL, I expect it to go through `/spdd-analysis` before implementation planning.
+          required: false
+        - label: I included enough detail for Codex to classify type, impact, and effort.
+          required: true
