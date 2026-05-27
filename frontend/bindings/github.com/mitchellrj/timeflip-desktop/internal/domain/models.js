@@ -44,6 +44,13 @@ export class AppConfig {
              */
             this["reconnectPolicy"] = (new ReconnectPolicy());
         }
+        if (!("weekStartsOn" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["weekStartsOn"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -82,6 +89,55 @@ export const ConnectionState = {
     ConnectionOffline: "offline",
     ConnectionError: "error",
 };
+
+export class DetailedHistoryRequest {
+    /**
+     * Creates a new DetailedHistoryRequest instance.
+     * @param {Partial<DetailedHistoryRequest>} [$$source = {}] - The source object to create the DetailedHistoryRequest.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["from"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["to"] = undefined;
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("pageSize" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["pageSize"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DetailedHistoryRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DetailedHistoryRequest}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DetailedHistoryRequest(/** @type {Partial<DetailedHistoryRequest>} */($$parsedSource));
+    }
+}
 
 export class DeviceLEDSettings {
     /**
@@ -785,6 +841,69 @@ export class ReconnectPolicy {
     }
 }
 
+export class ReportingPeriod {
+    /**
+     * Creates a new ReportingPeriod instance.
+     * @param {Partial<ReportingPeriod>} [$$source = {}] - The source object to create the ReportingPeriod.
+     */
+    constructor($$source = {}) {
+        if (!("preset" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["preset"] = "";
+        }
+        if (!("from" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["from"] = null;
+        }
+        if (!("to" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["to"] = null;
+        }
+        if (!("locale" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["locale"] = "";
+        }
+        if (!("timeZone" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["timeZone"] = "";
+        }
+        if (!("weekStartsOn" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["weekStartsOn"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReportingPeriod instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ReportingPeriod}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReportingPeriod(/** @type {Partial<ReportingPeriod>} */($$parsedSource));
+    }
+}
+
 export class StageResult {
     /**
      * Creates a new StageResult instance.
@@ -1288,6 +1407,27 @@ export class TaskSessionFilter {
              */
             this["to"] = undefined;
         }
+        if (!("overlap" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["overlap"] = false;
+        }
+        if (!("limit" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["limit"] = 0;
+        }
+        if (!("offset" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["offset"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1300,6 +1440,235 @@ export class TaskSessionFilter {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new TaskSessionFilter(/** @type {Partial<TaskSessionFilter>} */($$parsedSource));
+    }
+}
+
+export class TaskSessionPage {
+    /**
+     * Creates a new TaskSessionPage instance.
+     * @param {Partial<TaskSessionPage>} [$$source = {}] - The source object to create the TaskSessionPage.
+     */
+    constructor($$source = {}) {
+        if (!("sessions" in $$source)) {
+            /**
+             * @member
+             * @type {TaskSession[]}
+             */
+            this["sessions"] = [];
+        }
+        if (!("page" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["page"] = 0;
+        }
+        if (!("pageSize" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["pageSize"] = 0;
+        }
+        if (!("totalCount" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["totalCount"] = 0;
+        }
+        if (!("hasNext" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["hasNext"] = false;
+        }
+        if (!("hasPrevious" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["hasPrevious"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskSessionPage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TaskSessionPage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sessions" in $$parsedSource) {
+            $$parsedSource["sessions"] = $$createField0_0($$parsedSource["sessions"]);
+        }
+        return new TaskSessionPage(/** @type {Partial<TaskSessionPage>} */($$parsedSource));
+    }
+}
+
+export class TaskTimeSummary {
+    /**
+     * Creates a new TaskTimeSummary instance.
+     * @param {Partial<TaskTimeSummary>} [$$source = {}] - The source object to create the TaskTimeSummary.
+     */
+    constructor($$source = {}) {
+        if (!("taskID" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["taskID"] = "";
+        }
+        if (!("label" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["label"] = "";
+        }
+        if (!("icon" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["icon"] = "";
+        }
+        if (!("color" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["color"] = "";
+        }
+        if (!("activeSeconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["activeSeconds"] = 0;
+        }
+        if (!("share" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["share"] = 0;
+        }
+        if (!("other" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["other"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskTimeSummary instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TaskTimeSummary}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TaskTimeSummary(/** @type {Partial<TaskTimeSummary>} */($$parsedSource));
+    }
+}
+
+export class TimeReport {
+    /**
+     * Creates a new TimeReport instance.
+     * @param {Partial<TimeReport>} [$$source = {}] - The source object to create the TimeReport.
+     */
+    constructor($$source = {}) {
+        if (!("period" in $$source)) {
+            /**
+             * @member
+             * @type {ReportingPeriod}
+             */
+            this["period"] = (new ReportingPeriod());
+        }
+        if (!("totalActiveSeconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["totalActiveSeconds"] = 0;
+        }
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {TaskTimeSummary[]}
+             */
+            this["rows"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TimeReport instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TimeReport}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType11;
+        const $$createField2_0 = $$createType13;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("period" in $$parsedSource) {
+            $$parsedSource["period"] = $$createField0_0($$parsedSource["period"]);
+        }
+        if ("rows" in $$parsedSource) {
+            $$parsedSource["rows"] = $$createField2_0($$parsedSource["rows"]);
+        }
+        return new TimeReport(/** @type {Partial<TimeReport>} */($$parsedSource));
+    }
+}
+
+export class TimeReportRequest {
+    /**
+     * Creates a new TimeReportRequest instance.
+     * @param {Partial<TimeReportRequest>} [$$source = {}] - The source object to create the TimeReportRequest.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["from"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["to"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | null | undefined}
+             */
+            this["now"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TimeReportRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TimeReportRequest}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TimeReportRequest(/** @type {Partial<TimeReportRequest>} */($$parsedSource));
     }
 }
 
@@ -1377,3 +1746,8 @@ const $$createType5 = $Create.Nullable($$createType4);
 const $$createType6 = DeviceTapSettings.createFrom;
 const $$createType7 = TapTuningObservation.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = TaskSession.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = ReportingPeriod.createFrom;
+const $$createType12 = TaskTimeSummary.createFrom;
+const $$createType13 = $Create.Array($$createType12);

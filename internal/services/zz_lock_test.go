@@ -27,7 +27,7 @@ func TestSetLockedPersistsDeviceState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !state.Locked || !state.Paused || state.ConnectionState != domain.ConnectionConnected || state.CurrentFacet != 4 {
+	if !state.Locked || state.Paused || state.ConnectionState != domain.ConnectionConnected || state.CurrentFacet != 4 {
 		t.Fatalf("unexpected device state: %#v", state)
 	}
 	if len(client.locks) != 1 || !client.locks[0] {
@@ -38,13 +38,13 @@ func TestSetLockedPersistsDeviceState(t *testing.T) {
 	}
 }
 
-func TestUnlockResumesStoredCurrentFacet(t *testing.T) {
+func TestLockDoesNotPauseAndIgnoresFacetChangesUntilUnlocked(t *testing.T) {
 	ctx := context.Background()
 	st := &trackingMemoryStore{}
 
-	unlockAt := time.Date(2026, 5, 25, 10, 15, 0, 0, time.UTC)
+	now := time.Date(2026, 5, 25, 10, 15, 0, 0, time.UTC)
 	bus := &MemoryEventBus{}
-	tracking := NewTrackingService(st, fixedClock{t: unlockAt}, bus)
+	tracking := NewTrackingService(st, fixedClock{t: now}, bus)
 	client := &lockClient{}
 	svc := NewDeviceService(client, st, nil, tracking, nil, bus, tracking.clock)
 	svc.handles["d1"] = pauseHandle("d1")
@@ -67,55 +67,45 @@ func TestUnlockResumesStoredCurrentFacet(t *testing.T) {
 	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 1, OccurredAt: start, Source: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tracking.PauseTrackingAtWithState(ctx, "d1", "user_lock", start.Add(5*time.Minute)); err != nil {
-		t.Fatal(err)
-	}
-	state, err := st.GetDeviceState(ctx, "d1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	state.Locked = true
-	if err := st.SaveDeviceState(ctx, state); err != nil {
+	if err := svc.SetLocked(ctx, "d1", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 2, OccurredAt: start.Add(10 * time.Minute), Source: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SetLocked(ctx, "d1", false); err != nil {
-		t.Fatal(err)
-	}
 
-	state, err = st.GetDeviceState(ctx, "d1")
+	state, err := st.GetDeviceState(ctx, "d1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Locked || state.Paused || state.CurrentFacet != 2 {
-		t.Fatalf("expected unlock to resume stored current facet, got %#v", state)
+	if !state.Locked || state.Paused || state.CurrentFacet != 1 {
+		t.Fatalf("expected lock to keep tracking original facet without pausing, got %#v", state)
 	}
-	if len(client.locks) != 1 || client.locks[0] {
-		t.Fatalf("expected one unlock command, got %#v", client.locks)
+	if len(client.locks) != 1 || !client.locks[0] {
+		t.Fatalf("expected one lock command, got %#v", client.locks)
 	}
 	sessions, err := st.ListTaskSessions(ctx, domain.TaskSessionFilter{DeviceID: "d1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sessions) != 2 {
-		t.Fatalf("expected old session plus new current session, got %d: %#v", len(sessions), sessions)
+	if len(sessions) != 1 {
+		t.Fatalf("expected locked facet change to keep one current session, got %d: %#v", len(sessions), sessions)
 	}
-	var coding, review domain.TaskSession
-	for _, session := range sessions {
-		switch session.TaskID {
-		case "task-1":
-			coding = session
-		case "task-2":
-			review = session
-		}
+	if sessions[0].TaskID != "task-1" || sessions[0].EndedAt != nil || sessions[0].PauseStartedAt != nil {
+		t.Fatalf("expected original task to keep tracking while locked, got %#v", sessions[0])
 	}
-	if coding.ID == "" || coding.EndedAt == nil || coding.DurationSeconds != 900 || coding.PausedSeconds != 600 {
-		t.Fatalf("unexpected closed coding session: %#v", coding)
+	if err := svc.SetLocked(ctx, "d1", false); err != nil {
+		t.Fatal(err)
 	}
-	if review.ID == "" || review.EndedAt != nil || !review.StartedAt.Equal(unlockAt) || review.Facet != 2 {
-		t.Fatalf("unexpected resumed review session: %#v", review)
+	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 2, OccurredAt: start.Add(20 * time.Minute), Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err = st.GetDeviceState(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Locked || state.Paused || state.CurrentFacet != 2 {
+		t.Fatalf("expected unlocked facet event to switch tracking, got %#v", state)
 	}
 }
 

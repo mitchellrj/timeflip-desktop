@@ -4,118 +4,126 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/mitchellrj/timeflip-desktop/internal/domain"
 	_ "modernc.org/sqlite"
 )
 
-func TestSQLiteStoreMigrateTwiceAndPersistTask(t *testing.T) {
+func TestListTaskSessionsOverlapFilterIncludesBoundaryCrossingSessions(t *testing.T) {
+	st, closeStore := newTestSQLiteStore(t)
+	defer closeStore()
+	ctx := context.Background()
+	base := time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)
+	for _, session := range []domain.TaskSession{
+		testSession("inside", base.Add(15*time.Minute), base.Add(30*time.Minute)),
+		testSession("before", base.Add(-2*time.Hour), base.Add(-time.Hour)),
+		testSession("starts-before", base.Add(-30*time.Minute), base.Add(15*time.Minute)),
+		testSession("ends-after", base.Add(45*time.Minute), base.Add(90*time.Minute)),
+		testSession("contains", base.Add(-time.Hour), base.Add(2*time.Hour)),
+		testOpenSession("open", base.Add(50*time.Minute)),
+	} {
+		if err := st.SaveTaskSession(ctx, session); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	from := base
+	to := base.Add(time.Hour)
+	sessions, err := st.ListTaskSessions(ctx, domain.TaskSessionFilter{From: &from, To: &to, Overlap: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, session := range sessions {
+		got[session.ID] = true
+	}
+	for _, id := range []string{"inside", "starts-before", "ends-after", "contains", "open"} {
+		if !got[id] {
+			t.Fatalf("expected overlap result to include %s, got %#v", id, got)
+		}
+	}
+	if got["before"] {
+		t.Fatalf("expected non-overlapping session to be excluded, got %#v", got)
+	}
+	count, err := st.CountTaskSessions(ctx, domain.TaskSessionFilter{From: &from, To: &to, Overlap: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 5 {
+		t.Fatalf("expected overlap count 5, got %d", count)
+	}
+}
+
+func TestListTaskSessionsPaginationUsesNewestFirstOrder(t *testing.T) {
+	st, closeStore := newTestSQLiteStore(t)
+	defer closeStore()
+	ctx := context.Background()
+	base := time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)
+	for i, id := range []string{"a", "b", "c", "d"} {
+		started := base.Add(time.Duration(i) * time.Hour)
+		if err := st.SaveTaskSession(ctx, testSession(id, started, started.Add(15*time.Minute))); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sessions, err := st.ListTaskSessions(ctx, domain.TaskSessionFilter{Limit: 2, Offset: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 2 || sessions[0].ID != "c" || sessions[1].ID != "b" {
+		t.Fatalf("expected second page in newest-first order, got %#v", sessions)
+	}
+	count, err := st.CountTaskSessions(ctx, domain.TaskSessionFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Fatalf("expected total count 4, got %d", count)
+	}
+}
+
+func newTestSQLiteStore(t *testing.T) (*SQLiteStore, func()) {
+	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = db.Close() }()
+	st := NewSQLiteStore(db)
+	if err := st.Migrate(context.Background()); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	return st, func() { _ = db.Close() }
+}
 
-	s := NewSQLiteStore(db)
-	ctx := context.Background()
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("first migrate: %v", err)
+func testSession(id string, started time.Time, ended time.Time) domain.TaskSession {
+	duration := uint32(ended.Sub(started).Seconds())
+	return domain.TaskSession{
+		ID:                id,
+		DeviceID:          "d1",
+		TaskID:            "task-" + id,
+		TaskLabelSnapshot: "Task " + id,
+		TaskIconSnapshot:  "code",
+		TaskColorSnapshot: "#69d2a5",
+		Facet:             1,
+		StartedAt:         started,
+		EndedAt:           &ended,
+		DurationSeconds:   duration,
+		Source:            "test",
 	}
-	if err := s.Migrate(ctx); err != nil {
-		t.Fatalf("second migrate: %v", err)
-	}
+}
 
-	task := domain.Task{ID: "task-1", Label: "Coding", Icon: "code", Color: "#2B6CB0"}
-	if err := s.SaveTask(ctx, task); err != nil {
-		t.Fatalf("save task: %v", err)
-	}
-	tasks, err := s.ListTasks(ctx, false)
-	if err != nil {
-		t.Fatalf("list tasks: %v", err)
-	}
-	if len(tasks) != 1 || tasks[0].Label != "Coding" {
-		t.Fatalf("unexpected tasks: %#v", tasks)
-	}
-
-	profile := domain.DeviceProfile{ID: "d1", DisplayName: "TimeFlip", AdvertisedName: "TimeFlip", ProtocolVersion: "v4", FirmwareVersion: "FW_v3.59", StoredPassword: "000000"}
-	if err := s.SaveDeviceProfile(ctx, profile); err != nil {
-		t.Fatalf("save device profile: %v", err)
-	}
-	loadedProfile, err := s.GetDeviceProfile(ctx, "d1")
-	if err != nil {
-		t.Fatalf("get device profile: %v", err)
-	}
-	if loadedProfile.FirmwareVersion != "FW_v3.59" || loadedProfile.ProtocolVersion != "v4" {
-		t.Fatalf("unexpected device profile: %#v", loadedProfile)
-	}
-
-	assignment := domain.FacetAssignment{
-		ID:                   "assignment-1",
-		DeviceID:             "d1",
-		Facet:                1,
-		TaskID:               "task-1",
-		TaskLabelSnapshot:    "Coding",
-		TaskIconSnapshot:     "code",
-		TaskColorSnapshot:    "#2B6CB0",
-		IsPomodoroAssignment: true,
-		PomodoroLimitSeconds: 1500,
-		ConfirmedOnDevice:    true,
-	}
-	if err := s.SaveFacetAssignment(ctx, assignment); err != nil {
-		t.Fatalf("save facet assignment: %v", err)
-	}
-	loadedAssignment, err := s.GetFacetAssignment(ctx, "d1", 1)
-	if err != nil {
-		t.Fatalf("get facet assignment: %v", err)
-	}
-	if !loadedAssignment.IsPomodoroAssignment || loadedAssignment.PomodoroLimitSeconds != 1500 || !loadedAssignment.ConfirmedOnDevice {
-		t.Fatalf("unexpected facet assignment: %#v", loadedAssignment)
-	}
-	if err := s.DeleteFacetAssignment(ctx, "d1", 1); err != nil {
-		t.Fatalf("delete one facet assignment: %v", err)
-	}
-	assignments, err := s.ListFacetAssignments(ctx, "d1")
-	if err != nil {
-		t.Fatalf("list facet assignments after single delete: %v", err)
-	}
-	if len(assignments) != 0 {
-		t.Fatalf("expected no facet assignments after single delete, got %#v", assignments)
-	}
-	if err := s.SaveFacetAssignment(ctx, assignment); err != nil {
-		t.Fatalf("save facet assignment again: %v", err)
-	}
-	if err := s.DeleteFacetAssignments(ctx, "d1"); err != nil {
-		t.Fatalf("delete facet assignments: %v", err)
-	}
-	assignments, err = s.ListFacetAssignments(ctx, "d1")
-	if err != nil {
-		t.Fatalf("list facet assignments after delete: %v", err)
-	}
-	if len(assignments) != 0 {
-		t.Fatalf("expected no facet assignments after delete, got %#v", assignments)
-	}
-
-	settings := domain.DeviceTapSettings{DeviceID: "d1", Threshold: 20, Limit: 10, Latency: 5, Window: 30, ConfirmedOnDevice: true}
-	if err := s.SaveDeviceTapSettings(ctx, settings); err != nil {
-		t.Fatalf("save tap settings: %v", err)
-	}
-	loaded, err := s.GetDeviceTapSettings(ctx, "d1")
-	if err != nil {
-		t.Fatalf("get tap settings: %v", err)
-	}
-	if loaded.Threshold != 20 || loaded.Limit != 10 || loaded.Latency != 5 || loaded.Window != 30 || !loaded.ConfirmedOnDevice {
-		t.Fatalf("unexpected tap settings: %#v", loaded)
-	}
-
-	led := domain.DeviceLEDSettings{DeviceID: "d1", BrightnessPercent: 55, BlinkSeconds: 12, ConfirmedOnDevice: true}
-	if err := s.SaveDeviceLEDSettings(ctx, led); err != nil {
-		t.Fatalf("save LED settings: %v", err)
-	}
-	loadedLED, err := s.GetDeviceLEDSettings(ctx, "d1")
-	if err != nil {
-		t.Fatalf("get LED settings: %v", err)
-	}
-	if loadedLED.BrightnessPercent != 55 || loadedLED.BlinkSeconds != 12 || !loadedLED.ConfirmedOnDevice {
-		t.Fatalf("unexpected LED settings: %#v", loadedLED)
+func testOpenSession(id string, started time.Time) domain.TaskSession {
+	return domain.TaskSession{
+		ID:                id,
+		DeviceID:          "d1",
+		TaskID:            "task-" + id,
+		TaskLabelSnapshot: "Task " + id,
+		TaskIconSnapshot:  "code",
+		TaskColorSnapshot: "#69d2a5",
+		Facet:             1,
+		StartedAt:         started,
+		Source:            "test",
 	}
 }

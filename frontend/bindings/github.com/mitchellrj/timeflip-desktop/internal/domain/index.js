@@ -5,6 +5,7 @@
 export {
     AppConfig,
     ConnectionState,
+    DetailedHistoryRequest,
     DeviceLEDSettings,
     DeviceProfileView,
     DeviceState,
@@ -15,6 +16,7 @@ export {
     ManualAction,
     PairingWorkflow,
     ReconnectPolicy,
+    ReportingPeriod,
     StageResult,
     TapTuningObservation,
     TapTuningPreset,
@@ -22,5 +24,9 @@ export {
     Task,
     TaskSession,
     TaskSessionFilter,
+    TaskSessionPage,
+    TaskTimeSummary,
+    TimeReport,
+    TimeReportRequest,
     UnpairingWorkflow
 } from "./models.js";

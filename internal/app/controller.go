@@ -207,6 +207,14 @@ func (c *Controller) ListTaskSessions(filter domain.TaskSessionFilter) ([]domain
 	return c.history.ListTaskSessions(c.context(), filter)
 }
 
+func (c *Controller) GetTimeReport(req domain.TimeReportRequest) (domain.TimeReport, error) {
+	return c.history.BuildTimeReport(c.context(), req)
+}
+
+func (c *Controller) ListTaskSessionPage(req domain.DetailedHistoryRequest) (domain.TaskSessionPage, error) {
+	return c.history.ListTaskSessionPage(c.context(), req)
+}
+
 func (c *Controller) SaveSettings(config domain.AppConfig) error {
 	return c.config.Save(c.context(), config)
 }

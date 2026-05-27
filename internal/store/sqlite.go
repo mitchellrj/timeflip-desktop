@@ -51,7 +51,8 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 			medium_retry_interval_ns INTEGER NOT NULL,
 			long_retry_interval_ns INTEGER NOT NULL,
 			offline_after_duration_ns INTEGER NOT NULL,
-			offline_after_failures INTEGER NOT NULL
+			offline_after_failures INTEGER NOT NULL,
+			week_starts_on TEXT NOT NULL DEFAULT 'locale'
 		)`,
 		`CREATE TABLE IF NOT EXISTS device_profiles (
 			id TEXT PRIMARY KEY,
@@ -159,6 +160,9 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 		return err
 	}
 	if err := s.ensureColumn(ctx, "device_profiles", "firmware_version", "firmware_version TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn(ctx, "app_config", "week_starts_on", "week_starts_on TEXT NOT NULL DEFAULT 'locale'"); err != nil {
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE facet_assignments SET is_pomodoro_assignment = 1 WHERE is_pause_assignment = 0 AND pomodoro_limit_seconds > 0`); err != nil {
@@ -534,28 +538,17 @@ func (s *SQLiteStore) SaveTaskSession(ctx context.Context, session domain.TaskSe
 
 func (s *SQLiteStore) ListTaskSessions(ctx context.Context, filter domain.TaskSessionFilter) ([]domain.TaskSession, error) {
 	query := `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, paused_seconds, pause_started_at, source, start_event_number, end_event_number FROM task_sessions WHERE 1=1`
-	var args []any
-	if filter.DeviceID != "" {
-		query += ` AND device_id = ?`
-		args = append(args, filter.DeviceID)
-	}
-	if filter.TaskID != "" {
-		query += ` AND task_id = ?`
-		args = append(args, filter.TaskID)
-	}
-	if filter.Facet != nil {
-		query += ` AND facet = ?`
-		args = append(args, *filter.Facet)
-	}
-	if filter.From != nil {
-		query += ` AND started_at >= ?`
-		args = append(args, formatTime(*filter.From))
-	}
-	if filter.To != nil {
-		query += ` AND started_at <= ?`
-		args = append(args, formatTime(*filter.To))
-	}
+	where, args := taskSessionFilterSQL(filter)
+	query += where
 	query += ` ORDER BY started_at DESC`
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, wrapStoreErr("Could not list task sessions.", err)
@@ -572,6 +565,55 @@ func (s *SQLiteStore) ListTaskSessions(ctx context.Context, filter domain.TaskSe
 	return out, wrapStoreErr("Could not list task sessions.", rows.Err())
 }
 
+func (s *SQLiteStore) CountTaskSessions(ctx context.Context, filter domain.TaskSessionFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM task_sessions WHERE 1=1`
+	where, args := taskSessionFilterSQL(filter)
+	query += where
+	var count int
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	if err != nil {
+		return 0, wrapStoreErr("Could not count task sessions.", err)
+	}
+	return count, nil
+}
+
+func taskSessionFilterSQL(filter domain.TaskSessionFilter) (string, []any) {
+	var query string
+	var args []any
+	if filter.DeviceID != "" {
+		query += ` AND device_id = ?`
+		args = append(args, filter.DeviceID)
+	}
+	if filter.TaskID != "" {
+		query += ` AND task_id = ?`
+		args = append(args, filter.TaskID)
+	}
+	if filter.Facet != nil {
+		query += ` AND facet = ?`
+		args = append(args, *filter.Facet)
+	}
+	if filter.Overlap {
+		if filter.To != nil {
+			query += ` AND started_at < ?`
+			args = append(args, formatTime(*filter.To))
+		}
+		if filter.From != nil {
+			query += ` AND (ended_at IS NULL OR ended_at = '' OR ended_at > ?)`
+			args = append(args, formatTime(*filter.From))
+		}
+		return query, args
+	}
+	if filter.From != nil {
+		query += ` AND started_at >= ?`
+		args = append(args, formatTime(*filter.From))
+	}
+	if filter.To != nil {
+		query += ` AND started_at <= ?`
+		args = append(args, formatTime(*filter.To))
+	}
+	return query, args
+}
+
 func (s *SQLiteStore) GetOpenTaskSession(ctx context.Context, deviceID string) (domain.TaskSession, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, device_id, task_id, task_label_snapshot, task_icon_snapshot, task_color_snapshot, facet, started_at, ended_at, duration_seconds, paused_seconds, pause_started_at, source, start_event_number, end_event_number FROM task_sessions WHERE device_id = ? AND (ended_at IS NULL OR ended_at = '') ORDER BY started_at DESC LIMIT 1`, deviceID)
 	return scanSession(row)
@@ -581,9 +623,12 @@ func (s *SQLiteStore) SaveConfig(ctx context.Context, config domain.AppConfig) e
 	if config.ReconnectPolicy.OfflineAfterFailures == 0 {
 		config.ReconnectPolicy = domain.DefaultReconnectPolicy()
 	}
+	if config.WeekStartsOn == "" {
+		config.WeekStartsOn = "locale"
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO app_config
-		(id, database_path, communication_timeout_ns, command_timeout_ns, initial_retry_interval_ns, medium_retry_interval_ns, long_retry_interval_ns, offline_after_duration_ns, offline_after_failures)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, database_path, communication_timeout_ns, command_timeout_ns, initial_retry_interval_ns, medium_retry_interval_ns, long_retry_interval_ns, offline_after_duration_ns, offline_after_failures, week_starts_on)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			database_path=excluded.database_path,
 			communication_timeout_ns=excluded.communication_timeout_ns,
@@ -592,18 +637,19 @@ func (s *SQLiteStore) SaveConfig(ctx context.Context, config domain.AppConfig) e
 			medium_retry_interval_ns=excluded.medium_retry_interval_ns,
 			long_retry_interval_ns=excluded.long_retry_interval_ns,
 			offline_after_duration_ns=excluded.offline_after_duration_ns,
-			offline_after_failures=excluded.offline_after_failures`,
+			offline_after_failures=excluded.offline_after_failures,
+			week_starts_on=excluded.week_starts_on`,
 		config.DatabasePath, int64(config.CommunicationTimeout), int64(config.CommandTimeout), int64(config.ReconnectPolicy.InitialRetryInterval),
 		int64(config.ReconnectPolicy.MediumRetryInterval), int64(config.ReconnectPolicy.LongRetryInterval), int64(config.ReconnectPolicy.OfflineAfterDuration),
-		config.ReconnectPolicy.OfflineAfterFailures)
+		config.ReconnectPolicy.OfflineAfterFailures, config.WeekStartsOn)
 	return wrapStoreErr("Could not save app settings.", err)
 }
 
 func (s *SQLiteStore) LoadConfig(ctx context.Context) (domain.AppConfig, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT database_path, communication_timeout_ns, command_timeout_ns, initial_retry_interval_ns, medium_retry_interval_ns, long_retry_interval_ns, offline_after_duration_ns, offline_after_failures FROM app_config WHERE id = 1`)
+	row := s.db.QueryRowContext(ctx, `SELECT database_path, communication_timeout_ns, command_timeout_ns, initial_retry_interval_ns, medium_retry_interval_ns, long_retry_interval_ns, offline_after_duration_ns, offline_after_failures, week_starts_on FROM app_config WHERE id = 1`)
 	cfg := domain.DefaultAppConfig()
 	var communication, command, initial, medium, long, offline int64
-	err := row.Scan(&cfg.DatabasePath, &communication, &command, &initial, &medium, &long, &offline, &cfg.ReconnectPolicy.OfflineAfterFailures)
+	err := row.Scan(&cfg.DatabasePath, &communication, &command, &initial, &medium, &long, &offline, &cfg.ReconnectPolicy.OfflineAfterFailures, &cfg.WeekStartsOn)
 	if errors.Is(err, sql.ErrNoRows) {
 		return cfg, nil
 	}
@@ -616,6 +662,9 @@ func (s *SQLiteStore) LoadConfig(ctx context.Context) (domain.AppConfig, error) 
 	cfg.ReconnectPolicy.MediumRetryInterval = time.Duration(medium)
 	cfg.ReconnectPolicy.LongRetryInterval = time.Duration(long)
 	cfg.ReconnectPolicy.OfflineAfterDuration = time.Duration(offline)
+	if cfg.WeekStartsOn == "" {
+		cfg.WeekStartsOn = "locale"
+	}
 	return cfg, nil
 }
 
