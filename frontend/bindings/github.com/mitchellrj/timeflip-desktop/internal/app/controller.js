@@ -124,6 +124,13 @@ export function ListTaskSessions(filter) {
 }
 
 /**
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenBugReport() {
+    return $Call.ByID(4047306260);
+}
+
+/**
  * @param {$models.PairDeviceRequest} req
  * @returns {$CancellablePromise<domain$0.PairingWorkflow>}
  */

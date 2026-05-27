@@ -74,7 +74,7 @@ import {
   Youtube,
   Zap,
 } from 'lucide-react';
-import { Browser, Events } from '@wailsio/runtime';
+import { Events } from '@wailsio/runtime';
 import {
   BeginTapTuning,
   CancelTapTuning,
@@ -86,6 +86,7 @@ import {
   GetTimeReport,
   ListTapTuningPresets,
   ListTaskSessionPage,
+  OpenBugReport,
   PairDevice,
   PreviewTapTuningSettings,
   ResetFacetConfiguration,
@@ -104,7 +105,7 @@ import { byteValue, compactDuration, configToSettings, defaultHistoryPageSize, d
 import './styles.css';
 
 const emptyState = { config: {}, devices: [], states: [], tapSettings: [], tapTuningStates: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
-const bugReportURL = 'https://github.com/mitchellrj/timeflip-desktop/issues/new';
+const bugReportURL = 'https://github.com/mitchellrj/timeflip-desktop/issues/new?template=bug_report.yml';
 const defaultTask = { mode: 'task', id: '', label: '', icon: 'hard-hat', color: '#69d2a5', pomodoroLimitMinutes: 25 };
 const defaultPair = { deviceID: '', password: '000000', newPassword: '', allowOSPairing: true };
 const defaultPassword = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -255,11 +256,11 @@ function App() {
   async function openBugReport() {
     setError('');
     try {
-      await Browser.OpenURL(bugReportURL);
-    } catch (err) {
+      await OpenBugReport();
+    } catch {
       const opened = window.open(bugReportURL, '_blank', 'noopener,noreferrer');
       if (!opened) {
-        setError(messageFromError(err));
+        setError('Unable to open the bug report page.');
       }
     }
   }
