@@ -46,4 +46,8 @@ For syncing code changes back to prompt files.
 | SPDD Generate | Implementing from prompt | `.codex/prompts/spdd-generate.md` |
 | SPDD Sync | After code refactoring | `.codex/prompts/spdd-sync.md` |
 
+## Local Test Commands
+
+On macOS, run Go tests with `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` unless there is a specific reason not to. The app and tests may load Wails/Bluetooth/native Objective-C runtime paths; without this environment variable, broader `go test` runs can abort with `signal: abort trap` before assertions run.
+
 <!-- openspdd:end -->
