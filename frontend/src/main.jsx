@@ -74,7 +74,7 @@ import {
   Youtube,
   Zap,
 } from 'lucide-react';
-import { Events } from '@wailsio/runtime';
+import { Browser, Events } from '@wailsio/runtime';
 import {
   BeginTapTuning,
   CancelTapTuning,
@@ -104,6 +104,7 @@ import { byteValue, compactDuration, configToSettings, defaultHistoryPageSize, d
 import './styles.css';
 
 const emptyState = { config: {}, devices: [], states: [], tapSettings: [], tapTuningStates: [], ledSettings: [], tasks: [], sessions: [], facetConfigs: [] };
+const bugReportURL = 'https://github.com/mitchellrj/timeflip-desktop/issues/new';
 const defaultTask = { mode: 'task', id: '', label: '', icon: 'hard-hat', color: '#69d2a5', pomodoroLimitMinutes: 25 };
 const defaultPair = { deviceID: '', password: '000000', newPassword: '', allowOSPairing: true };
 const defaultPassword = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -248,6 +249,18 @@ function App() {
       return null;
     } finally {
       setBusy('');
+    }
+  }
+
+  async function openBugReport() {
+    setError('');
+    try {
+      await Browser.OpenURL(bugReportURL);
+    } catch (err) {
+      const opened = window.open(bugReportURL, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        setError(messageFromError(err));
+      }
     }
   }
 
@@ -874,9 +887,9 @@ function App() {
             <NavButton page="device" currentPage={visiblePage} onNavigate={setCurrentPage} icon={<Bluetooth size={17} />}>Pair device</NavButton>
           )}
         </nav>
-        <a className="navButton sidebarBugLink" href="https://github.com/mitchellrj/timeflip-desktop/issues/new" target="_blank" rel="noreferrer">
+        <button type="button" className="navButton sidebarBugLink" onClick={openBugReport}>
           <Bug size={17} /> Report a bug
-        </a>
+        </button>
       </aside>
 
       <section className="content">
