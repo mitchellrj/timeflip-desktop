@@ -904,11 +904,13 @@ dd {
 }
 
 .historyDialog {
-  width: min(920px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
+  width: min(1040px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 40px));
+  min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  row-gap: 12px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -916,9 +918,46 @@ dd {
   box-shadow: 0 18px 42px rgb(16 32 42 / 0.24);
 }
 
-.dialogSessionList {
+.historyDialogContent {
   min-height: 0;
   overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.historyDialogContent .errorText {
+  margin-top: 0;
+}
+
+.dialogSessionList {
+  overflow: visible;
+  align-content: start;
+  margin-top: 0;
+}
+
+.dialogSessionList .session {
+  min-height: auto;
+  align-items: start;
+  grid-template-columns: 48px minmax(0, 1fr);
+  row-gap: 6px;
+  overflow: visible;
+}
+
+.dialogSessionList .iconBadge {
+  width: 46px;
+  height: 46px;
+}
+
+.dialogSessionList .sessionMeta {
+  grid-template-columns: max-content minmax(160px, max-content) max-content minmax(160px, 1fr);
+  align-items: baseline;
+  gap: 6px 16px;
+}
+
+.dialogSessionList .sessionMeta dd {
+  overflow-wrap: anywhere;
 }
 
 .pager {
@@ -926,7 +965,7 @@ dd {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .pager span {
@@ -1150,6 +1189,10 @@ dd {
     grid-template-columns: max-content minmax(0, 1fr);
   }
 
+  .dialogSessionList .sessionMeta {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
   .segmented,
   .colorPickerRow {
     grid-template-columns: 1fr;
@@ -1162,6 +1205,8 @@ dd {
   }
 
   .historyDialog {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
     padding: 12px;
   }
 
