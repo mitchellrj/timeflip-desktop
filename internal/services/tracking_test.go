@@ -156,6 +156,122 @@ func TestPauseOffEventResumesPausedSessionWhenCurrentFacetIsWork(t *testing.T) {
 	}
 }
 
+func TestUnlockedFacetChangeClearsPausedStateBeforeSessionResume(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	st := store.NewSQLiteStore(db)
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	if err := st.SaveFacetAssignment(ctx, domain.FacetAssignment{
+		ID: "a1", DeviceID: "d1", Facet: 1, TaskID: "task-1",
+		TaskLabelSnapshot: "Coding", TaskIconSnapshot: "code", TaskColorSnapshot: "#2255AA",
+		EffectiveFrom: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)
+	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 1, OccurredAt: start, Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tracking.PauseTrackingAtWithState(ctx, "d1", "user_pause", start.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	bus.Events = nil
+	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 1, OccurredAt: start.Add(5 * time.Minute), Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := st.GetDeviceState(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Paused {
+		t.Fatalf("expected unlocked facet change to mark device unpaused: %#v", state)
+	}
+	open, err := st.GetOpenTaskSession(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open.PauseStartedAt != nil || open.PausedSeconds != 180 {
+		t.Fatalf("expected facet change to resume paused session, got %#v", open)
+	}
+	if len(bus.Events) == 0 || bus.Events[0].Name != "device.state" {
+		t.Fatalf("expected first published event to be device.state, got %#v", bus.Events)
+	}
+	published, ok := bus.Events[0].Payload.(domain.DeviceState)
+	if !ok || published.Paused || published.CurrentFacet != 1 {
+		t.Fatalf("expected first device.state event to show unpaused facet, got %#v", bus.Events[0])
+	}
+}
+
+func TestLockedFacetChangeDoesNotImplicitlyResume(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	st := store.NewSQLiteStore(db)
+	ctx := context.Background()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bus := &MemoryEventBus{}
+	tracking := NewTrackingService(st, fixedClock{t: time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)}, bus)
+	if err := st.SaveFacetAssignment(ctx, domain.FacetAssignment{
+		ID: "a1", DeviceID: "d1", Facet: 1, TaskID: "task-1",
+		TaskLabelSnapshot: "Coding", TaskIconSnapshot: "code", TaskColorSnapshot: "#2255AA",
+		EffectiveFrom: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)
+	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 1, OccurredAt: start, Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tracking.PauseTrackingAtWithState(ctx, "d1", "user_pause", start.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	state, err := st.GetDeviceState(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Locked = true
+	if err := st.SaveDeviceState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	bus.Events = nil
+	if err := tracking.ApplyDeviceEvent(ctx, domain.DeviceEventRecord{DeviceID: "d1", Kind: "facet", Facet: 1, OccurredAt: start.Add(5 * time.Minute), Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err = st.GetDeviceState(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Locked || !state.Paused {
+		t.Fatalf("expected locked facet change to stay paused and locked: %#v", state)
+	}
+	open, err := st.GetOpenTaskSession(ctx, "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open.PauseStartedAt == nil || open.PausedSeconds != 0 {
+		t.Fatalf("expected locked facet change to leave session paused, got %#v", open)
+	}
+	if len(bus.Events) == 0 || bus.Events[0].Name != "device.state" {
+		t.Fatalf("expected first published event to be device.state, got %#v", bus.Events)
+	}
+	published, ok := bus.Events[0].Payload.(domain.DeviceState)
+	if !ok || !published.Paused || !published.Locked {
+		t.Fatalf("expected first device.state event to stay paused while locked, got %#v", bus.Events[0])
+	}
+}
+
 func TestUnassignedFacetActsLikePause(t *testing.T) {
 	ctx := context.Background()
 	start := time.Date(2026, 5, 25, 11, 0, 0, 0, time.UTC)
@@ -258,6 +374,7 @@ type trackingMemoryStore struct {
 	tapSettings map[string]domain.DeviceTapSettings
 	state       domain.DeviceState
 	session     domain.TaskSession
+	sessions    map[string]domain.TaskSession
 }
 
 func (s *trackingMemoryStore) Migrate(context.Context) error { return nil }
@@ -361,13 +478,35 @@ func (s *trackingMemoryStore) ListDeviceEvents(context.Context, string) ([]domai
 }
 func (s *trackingMemoryStore) SaveTaskSession(_ context.Context, session domain.TaskSession) error {
 	s.session = session
+	if s.sessions == nil {
+		s.sessions = map[string]domain.TaskSession{}
+	}
+	s.sessions[session.ID] = session
 	return nil
 }
-func (s *trackingMemoryStore) ListTaskSessions(context.Context, domain.TaskSessionFilter) ([]domain.TaskSession, error) {
-	return nil, nil
+func (s *trackingMemoryStore) ListTaskSessions(_ context.Context, filter domain.TaskSessionFilter) ([]domain.TaskSession, error) {
+	if len(s.sessions) == 0 {
+		if s.session.ID == "" || (filter.DeviceID != "" && s.session.DeviceID != filter.DeviceID) {
+			return nil, nil
+		}
+		return []domain.TaskSession{s.session}, nil
+	}
+	sessions := make([]domain.TaskSession, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		if filter.DeviceID != "" && session.DeviceID != filter.DeviceID {
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
 }
-func (s *trackingMemoryStore) GetOpenTaskSession(context.Context, string) (domain.TaskSession, error) {
-	if s.session.ID == "" || s.session.EndedAt != nil {
+func (s *trackingMemoryStore) GetOpenTaskSession(_ context.Context, deviceID string) (domain.TaskSession, error) {
+	for _, session := range s.sessions {
+		if session.DeviceID == deviceID && session.EndedAt == nil {
+			return session, nil
+		}
+	}
+	if s.session.ID == "" || s.session.DeviceID != deviceID || s.session.EndedAt != nil {
 		return domain.TaskSession{}, domain.ErrNotFound
 	}
 	return s.session, nil

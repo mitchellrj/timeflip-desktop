@@ -62,7 +62,8 @@ func (s *TrackingService) ApplyDeviceEvent(ctx context.Context, event domain.Dev
 	if !isTrackingEvent(event) {
 		return nil
 	}
-	if err := s.updateDeviceStateFromEvent(ctx, event); err != nil {
+	state, err := s.updateDeviceStateFromEvent(ctx, event)
+	if err != nil {
 		return err
 	}
 	if event.Pause {
@@ -76,6 +77,12 @@ func (s *TrackingService) ApplyDeviceEvent(ctx context.Context, event domain.Dev
 			return err
 		}
 		return s.ResumeTrackingAt(ctx, event.DeviceID, "device_resume", event.OccurredAt)
+	}
+	if event.Facet > 0 && state.Locked {
+		if err := s.setPausedState(ctx, event.DeviceID, true, event.OccurredAt); err != nil {
+			return err
+		}
+		return s.PauseTrackingAt(ctx, event.DeviceID, "locked_facet", event.OccurredAt)
 	}
 	assignment, err := s.ResolveActiveAssignment(ctx, event.DeviceID, event.Facet)
 	if err != nil {
@@ -96,11 +103,11 @@ func isTrackingEvent(event domain.DeviceEventRecord) bool {
 	}
 }
 
-func (s *TrackingService) updateDeviceStateFromEvent(ctx context.Context, event domain.DeviceEventRecord) error {
+func (s *TrackingService) updateDeviceStateFromEvent(ctx context.Context, event domain.DeviceEventRecord) (domain.DeviceState, error) {
 	state, err := s.store.GetDeviceState(ctx, event.DeviceID)
 	if err != nil {
 		if !isStoreNotFound(err) {
-			return err
+			return domain.DeviceState{}, err
 		}
 		state = domain.DeviceState{DeviceID: event.DeviceID}
 	}
@@ -109,13 +116,16 @@ func (s *TrackingService) updateDeviceStateFromEvent(ctx context.Context, event 
 		state.CurrentFacet = event.Facet
 		state.CurrentFacetKnown = true
 		state.CurrentFacetUndefined = false
+		if state.Paused && !state.Locked {
+			state.Paused = false
+		}
 	}
 	state.UpdatedAt = event.OccurredAt
 	if err := s.store.SaveDeviceState(ctx, state); err != nil {
-		return err
+		return domain.DeviceState{}, err
 	}
 	s.bus.Publish(ctx, "device.state", state)
-	return nil
+	return state, nil
 }
 
 func (s *TrackingService) ResolveActiveAssignment(ctx context.Context, deviceID string, facet uint8) (domain.FacetAssignment, error) {
